@@ -148,10 +148,10 @@ public abstract class BaseDecoder implements Runnable {
         int sampleSize = mExtractor.readSampleData(inputBuffer, 0);
         if (sampleSize > 0) {
             mDecoder.queueInputBuffer(index,0,sampleSize,mExtractor.getSampleTime(),0);
+            mExtractor.advance();
         } else {    // 编码结束传递一个EOF标记
             mDecoder.queueInputBuffer(index, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM);
         }
-        mDecoder.flush();
     }
 
     /**
