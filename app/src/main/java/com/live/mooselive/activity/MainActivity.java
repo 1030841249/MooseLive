@@ -9,6 +9,7 @@ import android.widget.Button;
 
 import com.live.mooselive.R;
 import com.live.mooselive.base.BaseActivity;
+import com.live.mooselive.utils.PermissionUtil;
 
 import butterknife.BindView;
 import butterknife.OnClick;
@@ -34,6 +35,7 @@ public class MainActivity extends BaseActivity {
     @Override
     protected void init() {
 
+        PermissionUtil.requestWRPermissions(this);
     }
 
     @OnClick({R.id.btn_anchor, R.id.btn_audience})

@@ -1,7 +1,10 @@
 package com.live.mooselive.av.decoder;
 
+import android.media.MediaCodec;
 import android.media.MediaExtractor;
 import android.view.Surface;
+
+import java.nio.ByteBuffer;
 
 public class VideoDecoder extends BaseDecoder{
 
@@ -12,5 +15,10 @@ public class VideoDecoder extends BaseDecoder{
     @Override
     protected String getFormatType() {
         return "video/";
+    }
+
+    @Override
+    protected void renderData(MediaCodec.BufferInfo bufferInfo, ByteBuffer byteBuffer) {
+
     }
 }

@@ -33,30 +33,33 @@ public abstract class BaseDecoder implements Runnable {
     public BaseDecoder(MediaExtractor mExtractor,Surface surface) {
         this.mExtractor = mExtractor;
         mSurface = surface;
+        if (surface != null) {
+            render = true;
+        }
+        initFormat();
+        initDecoder();
+        mCurState = DecodeState.RUNNING;
+        mInputBuffers = mDecoder.getInputBuffers();
+        mOutputBuffers = mDecoder.getOutputBuffers();
     }
 
     @Override
     public void run() {
-        while(true) {
-            initFormat();
-            initDecoder();
-            // Android 4.4 版本以下
-            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) {
-                mInputBuffers = mDecoder.getInputBuffers();
-                mOutputBuffers = mDecoder.getOutputBuffers();
-                onDecode();
-            }
+        while(mCurState == DecodeState.RUNNING) {
         }
     }
 
     protected void initFormat() {
         for (int i = 0; i < mExtractor.getTrackCount(); i++) {
             MediaFormat mediaFormat = mExtractor.getTrackFormat(i);
-            if (mediaFormat.getString(MediaFormat.KEY_MIME).startsWith(getFormatType())) {
+            String mime = mediaFormat.getString(MediaFormat.KEY_MIME);
+            if (mime.startsWith(getFormatType())) {
                 mFormat = mediaFormat;
                 mExtractor.selectTrack(i);
-                mWidth = mFormat.getInteger(MediaFormat.KEY_WIDTH);
-                mHeight = mFormat.getInteger(MediaFormat.KEY_HEIGHT);
+                if (mime.startsWith("video/")) {
+                    mWidth = mFormat.getInteger(MediaFormat.KEY_WIDTH);
+                    mHeight = mFormat.getInteger(MediaFormat.KEY_HEIGHT);
+                }
                 mDuration = mFormat.getLong(MediaFormat.KEY_DURATION);
                 break;
             }
@@ -68,30 +71,7 @@ public abstract class BaseDecoder implements Runnable {
             mCurState = DecodeState.INIT;
             String type = mFormat.getString(MediaFormat.KEY_MIME);
             mDecoder = MediaCodec.createDecoderByType(type);
-            // 异步处理，需要在调用 configure 之前设置
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                mDecoder.setCallback(new MediaCodec.Callback() {
-                    @Override
-                    public void onInputBufferAvailable(@NonNull MediaCodec codec, int index) {
-                        BaseDecoder.this.onInputBufferAvailable(index,codec.getInputBuffer(index));
-                    }
-
-                    @Override
-                    public void onOutputBufferAvailable(@NonNull MediaCodec codec, int index, @NonNull MediaCodec.BufferInfo info) {
-                        BaseDecoder.this.onOutputBufferAvailable(index, info, codec.getOutputBuffer(index));
-                    }
-
-                    @Override
-                    public void onError(@NonNull MediaCodec codec, @NonNull MediaCodec.CodecException e) {
-                        BaseDecoder.this.onError(e);
-                    }
-
-                    @Override
-                    public void onOutputFormatChanged(@NonNull MediaCodec codec, @NonNull MediaFormat format) {
-                        BaseDecoder.this.onOutputFormatChanged(format);
-                    }
-                });
-            }
+//            initCallback();
             mDecoder.configure(mFormat, mSurface, null, 0);
             mDecoder.start();
             mCurState = DecodeState.START;
@@ -101,27 +81,62 @@ public abstract class BaseDecoder implements Runnable {
         }
     }
 
-    protected void onDecode() {
-        int inputIndex = mDecoder.dequeueInputBuffer(1000);
-        if (inputIndex >= 0) {
-            ByteBuffer inputBuffer = mInputBuffers[inputIndex];
-            onInputBufferAvailable(inputIndex,inputBuffer);
-        } else {
-            // TODO
-            return;
-        }
-        MediaCodec.BufferInfo bufferInfo = new MediaCodec.BufferInfo();
-        int outputIndex = mDecoder.dequeueOutputBuffer(bufferInfo, 1000);
-        if (outputIndex > 0) {
-            ByteBuffer outputBuffer = mOutputBuffers[outputIndex];
-            onOutputBufferAvailable(inputIndex, bufferInfo,outputBuffer);
-        } else {
-            // TODO
-            return;
-        }
+    private void initCallback() {
+        // 异步处理，需要在调用 configure 之前设置
+//            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+//                mDecoder.setCallback(new MediaCodec.Callback() {
+//                    @Override
+//                    public void onInputBufferAvailable(@NonNull MediaCodec codec, int index) {
+//                        BaseDecoder.this.onInputBufferAvailable(index,codec.getInputBuffer(index));
+//                    }
+//
+//                    @Override
+//                    public void onOutputBufferAvailable(@NonNull MediaCodec codec, int index, @NonNull MediaCodec.BufferInfo info) {
+//                        BaseDecoder.this.onOutputBufferAvailable(index, info, codec.getOutputBuffer(index));
+//                    }
+//
+//                    @Override
+//                    public void onError(@NonNull MediaCodec codec, @NonNull MediaCodec.CodecException e) {
+//                        BaseDecoder.this.onError(e);
+//                    }
+//
+//                    @Override
+//                    public void onOutputFormatChanged(@NonNull MediaCodec codec, @NonNull MediaFormat format) {
+//                        BaseDecoder.this.onOutputFormatChanged(format);
+//                    }
+//                });
+//            }
     }
 
-    protected abstract String getFormatType();
+    protected void onDecode() {
+        MediaCodec.BufferInfo bufferInfo;
+        int inputIndex;
+        int outputIndex;
+        while (true) {
+            inputIndex = mDecoder.dequeueInputBuffer(1000);
+            if (inputIndex >= 0) {
+                ByteBuffer inputBuffer = mInputBuffers[inputIndex];
+                onInputBufferAvailable(inputIndex,inputBuffer);
+            }
+            bufferInfo = new MediaCodec.BufferInfo();
+            outputIndex = mDecoder.dequeueOutputBuffer(bufferInfo, 1000);
+            if (outputIndex >= 0) break;
+            switch (outputIndex) {
+                case MediaCodec.INFO_TRY_AGAIN_LATER:
+                    break;
+                case MediaCodec.INFO_OUTPUT_FORMAT_CHANGED:
+                    break;
+                case MediaCodec.INFO_OUTPUT_BUFFERS_CHANGED:
+                    mOutputBuffers = mDecoder.getOutputBuffers();
+                    break;
+            }
+        }
+
+        if (outputIndex >= 0) {
+            ByteBuffer outputBuffer = mOutputBuffers[outputIndex];
+            onOutputBufferAvailable(outputIndex, bufferInfo,outputBuffer);
+        }
+    }
 
     public MediaFormat getFormat() {
         return mFormat;
@@ -145,9 +160,10 @@ public abstract class BaseDecoder implements Runnable {
      * @param index The index of the available input buffer.
      */
     void onInputBufferAvailable(int index,ByteBuffer inputBuffer) {
+        inputBuffer.clear();
         int sampleSize = mExtractor.readSampleData(inputBuffer, 0);
-        if (sampleSize > 0) {
-            mDecoder.queueInputBuffer(index,0,sampleSize,mExtractor.getSampleTime(),0);
+        if (sampleSize >= 0) {
+            mDecoder.queueInputBuffer(index,0,sampleSize,mExtractor.getSampleTime(),mExtractor.getSampleFlags());
             mExtractor.advance();
         } else {    // 编码结束传递一个EOF标记
             mDecoder.queueInputBuffer(index, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM);
@@ -162,6 +178,7 @@ public abstract class BaseDecoder implements Runnable {
      */
     void onOutputBufferAvailable( int index,  MediaCodec.BufferInfo bufferInfo,ByteBuffer outputBuffer){
         outputBuffer.position(bufferInfo.offset);
+        renderData(bufferInfo,outputBuffer);
         mDecoder.releaseOutputBuffer(index, render);
     }
 
@@ -180,7 +197,6 @@ public abstract class BaseDecoder implements Runnable {
      * @param format The new output format.
      */
     void onOutputFormatChanged( MediaFormat format) {
-        mFormat = format;
     }
 
     void onClose() {
@@ -188,4 +204,7 @@ public abstract class BaseDecoder implements Runnable {
         mDecoder.release();
     }
 
+    protected abstract String getFormatType();
+
+    protected abstract void renderData(MediaCodec.BufferInfo bufferInfo, ByteBuffer byteBuffer);
 }
