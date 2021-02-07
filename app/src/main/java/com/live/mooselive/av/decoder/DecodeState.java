@@ -4,6 +4,7 @@ public enum DecodeState {
     INIT,
     START,
     RUNNING,
-    STOP
+    PAUSE,
+    FINISH
 }
 

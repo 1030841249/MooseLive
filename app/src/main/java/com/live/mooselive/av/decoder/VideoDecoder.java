@@ -12,6 +12,10 @@ public class VideoDecoder extends BaseDecoder{
         super(mExtractor, surface);
     }
 
+    public VideoDecoder(String path, Surface surface) {
+        super(path, surface);
+    }
+
     @Override
     protected String getFormatType() {
         return "video/";

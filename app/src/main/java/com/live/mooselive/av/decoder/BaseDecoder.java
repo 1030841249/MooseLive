@@ -17,6 +17,8 @@ public abstract class BaseDecoder implements Runnable {
 
     static final String TAG = BaseDecoder.class.getName();
 
+    private final Object mLock = new Object();
+
     MediaCodec mDecoder;
     MediaExtractor mExtractor;
     MediaFormat mFormat;
@@ -27,13 +29,32 @@ public abstract class BaseDecoder implements Runnable {
     private int mHeight;
     private long mDuration;
 
+    private int mTrackIndex;
+
     private DecodeState mCurState;
     boolean render = false;
+    // 音视频同步，以系统时间为准
+    protected long mStartTimeForSync = 0;
+
+    public BaseDecoder(String path, Surface surface) {
+        mSurface = surface;
+        mExtractor = new MediaExtractor();
+        try {
+            mExtractor.setDataSource(path);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        init();
+    }
 
     public BaseDecoder(MediaExtractor mExtractor,Surface surface) {
         this.mExtractor = mExtractor;
         mSurface = surface;
-        if (surface != null) {
+        init();
+    }
+
+    private void init() {
+        if (mSurface != null) {
             render = true;
         }
         initFormat();
@@ -45,8 +66,16 @@ public abstract class BaseDecoder implements Runnable {
 
     @Override
     public void run() {
+        mStartTimeForSync = System.currentTimeMillis();
         while(mCurState == DecodeState.RUNNING) {
+            if (mCurState == DecodeState.PAUSE) {
+                waitDecoder();
+                mStartTimeForSync = System.currentTimeMillis() - getPTS();
+            }
+            onDecode();
         }
+        close();
+        processWork();
     }
 
     protected void initFormat() {
@@ -54,8 +83,8 @@ public abstract class BaseDecoder implements Runnable {
             MediaFormat mediaFormat = mExtractor.getTrackFormat(i);
             String mime = mediaFormat.getString(MediaFormat.KEY_MIME);
             if (mime.startsWith(getFormatType())) {
+                mTrackIndex = i;
                 mFormat = mediaFormat;
-                mExtractor.selectTrack(i);
                 if (mime.startsWith("video/")) {
                     mWidth = mFormat.getInteger(MediaFormat.KEY_WIDTH);
                     mHeight = mFormat.getInteger(MediaFormat.KEY_HEIGHT);
@@ -83,32 +112,33 @@ public abstract class BaseDecoder implements Runnable {
 
     private void initCallback() {
         // 异步处理，需要在调用 configure 之前设置
-//            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-//                mDecoder.setCallback(new MediaCodec.Callback() {
-//                    @Override
-//                    public void onInputBufferAvailable(@NonNull MediaCodec codec, int index) {
-//                        BaseDecoder.this.onInputBufferAvailable(index,codec.getInputBuffer(index));
-//                    }
-//
-//                    @Override
-//                    public void onOutputBufferAvailable(@NonNull MediaCodec codec, int index, @NonNull MediaCodec.BufferInfo info) {
-//                        BaseDecoder.this.onOutputBufferAvailable(index, info, codec.getOutputBuffer(index));
-//                    }
-//
-//                    @Override
-//                    public void onError(@NonNull MediaCodec codec, @NonNull MediaCodec.CodecException e) {
-//                        BaseDecoder.this.onError(e);
-//                    }
-//
-//                    @Override
-//                    public void onOutputFormatChanged(@NonNull MediaCodec codec, @NonNull MediaFormat format) {
-//                        BaseDecoder.this.onOutputFormatChanged(format);
-//                    }
-//                });
-//            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                mDecoder.setCallback(new MediaCodec.Callback() {
+                    @Override
+                    public void onInputBufferAvailable(@NonNull MediaCodec codec, int index) {
+                        BaseDecoder.this.onInputBufferAvailable(index,codec.getInputBuffer(index));
+                    }
+
+                    @Override
+                    public void onOutputBufferAvailable(@NonNull MediaCodec codec, int index, @NonNull MediaCodec.BufferInfo info) {
+                        BaseDecoder.this.onOutputBufferAvailable(index, info, codec.getOutputBuffer(index));
+                    }
+
+                    @Override
+                    public void onError(@NonNull MediaCodec codec, @NonNull MediaCodec.CodecException e) {
+                        BaseDecoder.this.onError(e);
+                    }
+
+                    @Override
+                    public void onOutputFormatChanged(@NonNull MediaCodec codec, @NonNull MediaFormat format) {
+                        BaseDecoder.this.onOutputFormatChanged(format);
+                    }
+                });
+            }
     }
 
     protected void onDecode() {
+        mExtractor.selectTrack(mTrackIndex);
         MediaCodec.BufferInfo bufferInfo;
         int inputIndex;
         int outputIndex;
@@ -131,27 +161,18 @@ public abstract class BaseDecoder implements Runnable {
                     break;
             }
         }
-
+        sleepRender();
         if (outputIndex >= 0) {
             ByteBuffer outputBuffer = mOutputBuffers[outputIndex];
             onOutputBufferAvailable(outputIndex, bufferInfo,outputBuffer);
         }
     }
 
-    public MediaFormat getFormat() {
-        return mFormat;
-    }
+    private void processWork() {
+        switch (mCurState) {
+            case PAUSE:
 
-    public int getmWidth() {
-        return mWidth;
-    }
-
-    public int getmHeight() {
-        return mHeight;
-    }
-
-    public long getmDuration() {
-        return mDuration;
+        }
     }
 
     /**
@@ -160,13 +181,13 @@ public abstract class BaseDecoder implements Runnable {
      * @param index The index of the available input buffer.
      */
     void onInputBufferAvailable(int index,ByteBuffer inputBuffer) {
-        inputBuffer.clear();
         int sampleSize = mExtractor.readSampleData(inputBuffer, 0);
         if (sampleSize >= 0) {
             mDecoder.queueInputBuffer(index,0,sampleSize,mExtractor.getSampleTime(),mExtractor.getSampleFlags());
             mExtractor.advance();
         } else {    // 编码结束传递一个EOF标记
             mDecoder.queueInputBuffer(index, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM);
+            mCurState = DecodeState.PAUSE;
         }
     }
 
@@ -199,9 +220,73 @@ public abstract class BaseDecoder implements Runnable {
     void onOutputFormatChanged( MediaFormat format) {
     }
 
-    void onClose() {
+    /**
+     * 同步
+     * 当前时间是否达到该帧的 PTS
+     */
+    private void sleepRender() {
+        long curTime = System.currentTimeMillis() - mStartTimeForSync;
+        if (curTime < getPTS()) {
+            // 未达到显示时间，休眠这个差量值
+            try {
+                Thread.sleep(getPTS() - curTime);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    /**
+     * PTS
+     * @return 微秒转换为毫秒
+     */
+    private long getPTS() {
+        return mExtractor.getSampleTime() / 1000;
+    }
+
+    public void pause() throws InterruptedException {
+        mCurState = DecodeState.PAUSE;
+    }
+
+    public void resume() {
+        mCurState = DecodeState.RUNNING;
+        synchronized (mLock) {
+            mLock.notify();
+        }
+    }
+
+    private void waitDecoder() {
+        synchronized (mLock) {
+            try {
+                mLock.wait();
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    void close() {
         mFormat = null;
         mDecoder.release();
+        mExtractor.release();
+        mDecoder = null;
+        mExtractor = null;
+    }
+
+    public MediaFormat getFormat() {
+        return mFormat;
+    }
+
+    public int getmWidth() {
+        return mWidth;
+    }
+
+    public int getmHeight() {
+        return mHeight;
+    }
+
+    public long getmDuration() {
+        return mDuration;
     }
 
     protected abstract String getFormatType();

@@ -36,6 +36,7 @@ public class MainActivity extends BaseActivity {
     protected void init() {
 
         PermissionUtil.requestWRPermissions(this);
+        PermissionUtil.requestMicoPermisson(this);
     }
 
     @OnClick({R.id.btn_anchor, R.id.btn_audience})
