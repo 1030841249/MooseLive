@@ -4,6 +4,8 @@ import android.media.MediaCodec;
 import android.media.MediaExtractor;
 import android.view.Surface;
 
+import com.live.mooselive.App;
+
 import java.nio.ByteBuffer;
 
 public class VideoDecoder extends BaseDecoder{

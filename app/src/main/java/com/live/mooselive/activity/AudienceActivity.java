@@ -36,7 +36,11 @@ public class AudienceActivity extends BaseActivity {
             public void surfaceCreated(SurfaceHolder holder) {
 //                mediaDecoder = new MediaDecoder("http://vfx.mtime.cn/Video/2019/02/04/mp4/190204084208765161.mp4",holder.getSurface());
 //                String path = Environment.getExternalStorageDirectory().getAbsolutePath() + "/test.mp4";
-                String path = Environment.getDataDirectory().getAbsolutePath() +"/data/"+ getApplication().getPackageName() + "/test.mp4";
+//                String path = Environment.getDataDirectory().getAbsolutePath() +"/data/"+ getApplication().getPackageName() + "/russia.flv";
+                String path = Environment.getDataDirectory().getAbsolutePath() +"/data/"+ getApplication().getPackageName() + "/receive.mp4";
+//                String path = Environment.getDataDirectory().getAbsolutePath() +"/data/"+ getApplication().getPackageName() + "/receive.flv";
+//                String path = Environment.getDataDirectory().getAbsolutePath() +"/data/"+ getApplication().getPackageName() + "/fm.flv";
+//                String path = Environment.getDataDirectory().getAbsolutePath() +"/data/"+ getApplication().getPackageName() + "/test.mp4";
 //                mediaDecoder = new MediaDecoder(path,holder.getSurface());
 //                mediaDecoder = new MediaDecoder(AudienceActivity.this,R.raw.test,holder.getSurface());
                 mediaDecoder = new MediaDecoder(path,holder.getSurface());
@@ -68,5 +72,11 @@ public class AudienceActivity extends BaseActivity {
                 }
                 break;
         }
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        mediaDecoder.release();
     }
 }

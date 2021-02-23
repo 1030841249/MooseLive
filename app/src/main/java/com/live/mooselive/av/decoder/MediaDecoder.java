@@ -19,35 +19,15 @@ import java.util.concurrent.ThreadPoolExecutor;
 
 public class MediaDecoder {
 
-    private MediaExtractor mExtractor;
     private VideoDecoder mVideoDecoder;
     private AudioDecoder mAudioDecoder;
 
     private ExecutorService mThreadPool;
 
     public MediaDecoder(String path, Surface surface) {
-        try {
-            mExtractor = new MediaExtractor();
-            mExtractor.setDataSource(path);
-
-            mVideoDecoder = new VideoDecoder(path, surface);
-            mAudioDecoder = new AudioDecoder(path);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+        mVideoDecoder = new VideoDecoder(path, surface);
+        mAudioDecoder = new AudioDecoder(path);
         mThreadPool = Executors.newFixedThreadPool(5);
-    }
-
-    public MediaDecoder(Context context,int rawId, Surface surface) {
-        try {
-            mExtractor = new MediaExtractor();
-            AssetFileDescriptor fileDescriptor = context.getResources().openRawResourceFd(rawId);
-            mExtractor.setDataSource(fileDescriptor);
-            mVideoDecoder = new VideoDecoder(mExtractor, surface);
-            mAudioDecoder = new AudioDecoder(mExtractor);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
     }
 
 
@@ -90,6 +70,12 @@ public class MediaDecoder {
                 mVideoDecoder.resume();
             }
         });
+    }
+
+    public void release() {
+        mAudioDecoder.finish();
+        mVideoDecoder.finish();
+        mThreadPool.shutdown();
     }
 
     public VideoDecoder getmVideoDecoder() {

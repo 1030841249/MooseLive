@@ -69,7 +69,7 @@ public class AudioDecoder extends BaseDecoder {
     @Override
     protected void renderData(MediaCodec.BufferInfo bufferInfo, ByteBuffer byteBuffer) {
         byte[] buffer = new byte[bufferInfo.size];
-        byteBuffer.get(buffer, bufferInfo.offset, bufferInfo.size);
+        byteBuffer.get(buffer, bufferInfo.offset, bufferInfo.size-bufferInfo.offset);
         audioTrack.write(buffer, 0, bufferInfo.size - bufferInfo.offset);
     }
 }

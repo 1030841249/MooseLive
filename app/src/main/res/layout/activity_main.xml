@@ -21,4 +21,9 @@
         android:layout_height="wrap_content"
         android:text="观看直播"/>
 
+    <ImageView
+        android:id="@+id/iv_main"
+        android:layout_width="match_parent"
+        android:layout_height="200dp" />
+
 </LinearLayout>

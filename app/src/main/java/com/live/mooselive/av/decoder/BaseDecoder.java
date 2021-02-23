@@ -1,5 +1,7 @@
 package com.live.mooselive.av.decoder;
 
+import android.content.Context;
+import android.content.res.AssetFileDescriptor;
 import android.media.MediaCodec;
 import android.media.MediaExtractor;
 import android.media.MediaFormat;
@@ -8,12 +10,16 @@ import android.view.Surface;
 
 import androidx.annotation.NonNull;
 
+import com.live.mooselive.App;
+import com.live.mooselive.R;
 import com.live.mooselive.utils.LogUtil;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
 public abstract class BaseDecoder implements Runnable {
+
+    static long S_SYNC_TIME = 0;
 
     static final String TAG = BaseDecoder.class.getName();
 
@@ -41,6 +47,8 @@ public abstract class BaseDecoder implements Runnable {
         mExtractor = new MediaExtractor();
         try {
             mExtractor.setDataSource(path);
+//            AssetFileDescriptor assetFileDescriptor = App.getInstance().getResources().openRawResourceFd(R.raw.test);
+//            mExtractor.setDataSource(assetFileDescriptor);
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -88,6 +96,12 @@ public abstract class BaseDecoder implements Runnable {
                 if (mime.startsWith("video/")) {
                     mWidth = mFormat.getInteger(MediaFormat.KEY_WIDTH);
                     mHeight = mFormat.getInteger(MediaFormat.KEY_HEIGHT);
+                    if (mWidth == 0) {
+//                        mFormat.setInteger(MediaFormat.KEY_WIDTH, 1024);
+                    }
+                    if (mHeight == 0) {
+//                        mFormat.setInteger(MediaFormat.KEY_HEIGHT, 576);
+                    }
                 }
                 mDuration = mFormat.getLong(MediaFormat.KEY_DURATION);
                 break;
@@ -142,30 +156,44 @@ public abstract class BaseDecoder implements Runnable {
         MediaCodec.BufferInfo bufferInfo;
         int inputIndex;
         int outputIndex;
+
         while (true) {
+            LogUtil.e(TAG,mFormat.getString(MediaFormat.KEY_MIME) +"    请求输入队列");
             inputIndex = mDecoder.dequeueInputBuffer(1000);
             if (inputIndex >= 0) {
+                LogUtil.e(TAG,mFormat.getString(MediaFormat.KEY_MIME) +"    将待解码数据填充进队列");
                 ByteBuffer inputBuffer = mInputBuffers[inputIndex];
                 onInputBufferAvailable(inputIndex,inputBuffer);
             }
+            LogUtil.e(TAG,mFormat.getString(MediaFormat.KEY_MIME) +"    请求解码队列");
             bufferInfo = new MediaCodec.BufferInfo();
             outputIndex = mDecoder.dequeueOutputBuffer(bufferInfo, 1000);
-            if (outputIndex >= 0) break;
+            LogUtil.e(TAG,mFormat.getString(MediaFormat.KEY_MIME) +"    outputIndex:  " + outputIndex);
+            if (outputIndex >= 0) {
+                break;
+            }
             switch (outputIndex) {
                 case MediaCodec.INFO_TRY_AGAIN_LATER:
+                    LogUtil.e(TAG,mFormat.getString(MediaFormat.KEY_MIME) +"    INFO_TRY_AGAIN_LATER");
                     break;
                 case MediaCodec.INFO_OUTPUT_FORMAT_CHANGED:
+                    LogUtil.e(TAG, mFormat.getString(MediaFormat.KEY_MIME) + "    INFO_OUTPUT_FORMAT_CHANGED");
+//                    mFormat = mDecoder.getOutputFormat();
                     break;
                 case MediaCodec.INFO_OUTPUT_BUFFERS_CHANGED:
                     mOutputBuffers = mDecoder.getOutputBuffers();
+                    break;
+                default:
                     break;
             }
         }
         sleepRender();
         if (outputIndex >= 0) {
+            LogUtil.e(TAG,mFormat.getString(MediaFormat.KEY_MIME) +"    使用解码后的数据");
             ByteBuffer outputBuffer = mOutputBuffers[outputIndex];
             onOutputBufferAvailable(outputIndex, bufferInfo,outputBuffer);
         }
+//        LogUtil.e(TAG,mFormat.getString(MediaFormat.KEY_MIME) +"    surface state : " +);
     }
 
     private void processWork() {
@@ -198,9 +226,15 @@ public abstract class BaseDecoder implements Runnable {
      * @param bufferInfo Info regarding the available output buffer {@link MediaCodec.BufferInfo}.
      */
     void onOutputBufferAvailable( int index,  MediaCodec.BufferInfo bufferInfo,ByteBuffer outputBuffer){
-        outputBuffer.position(bufferInfo.offset);
-        renderData(bufferInfo,outputBuffer);
+        // 偏移量小于总读取数
+        if (bufferInfo.offset < bufferInfo.size) {
+            LogUtil.e(TAG,mFormat.getString(MediaFormat.KEY_MIME) +"    偏移量小于总读取数，通知渲染");
+            outputBuffer.position(bufferInfo.offset);
+            renderData(bufferInfo,outputBuffer);
+        }
+        LogUtil.e(TAG,mFormat.getString(MediaFormat.KEY_MIME) +"    start 释放空间");
         mDecoder.releaseOutputBuffer(index, render);
+        LogUtil.e(TAG,mFormat.getString(MediaFormat.KEY_MIME) +"    end 释放空间");
     }
 
     /**
@@ -225,9 +259,14 @@ public abstract class BaseDecoder implements Runnable {
      * 当前时间是否达到该帧的 PTS
      */
     private void sleepRender() {
-        long curTime = System.currentTimeMillis() - mStartTimeForSync;
+        if (!render) {
+            // audio
+            S_SYNC_TIME = getPTS();
+        }
+        long curTime = S_SYNC_TIME;
         if (curTime < getPTS()) {
             // 未达到显示时间，休眠这个差量值
+            LogUtil.e(TAG, mFormat.getString(MediaFormat.KEY_MIME) + "    sleepRender : " + getPTS() + " - " + curTime + " = " + (getPTS() - curTime));
             try {
                 Thread.sleep(getPTS() - curTime);
             } catch (InterruptedException e) {
@@ -253,6 +292,10 @@ public abstract class BaseDecoder implements Runnable {
         synchronized (mLock) {
             mLock.notify();
         }
+    }
+
+    public void finish() {
+        mCurState = DecodeState.FINISH;
     }
 
     private void waitDecoder() {
