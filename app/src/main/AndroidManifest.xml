@@ -15,7 +15,8 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/AppTheme">
-        <activity android:name=".activity.AudienceActivity"></activity>
+        <activity android:name=".activity.RTMPActivity"></activity>
+        <activity android:name=".activity.AudienceActivity" />
         <activity android:name=".activity.AnchorActivity" />
         <activity android:name=".activity.MainActivity">
             <intent-filter>

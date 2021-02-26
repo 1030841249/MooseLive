@@ -26,23 +26,21 @@ void run() {
 
 void receiveRTMPData(JNIEnv *env) {
 
-//    g_jvm->AttachCurrentThread(&env, NULL);
     jclass cls = env->GetObjectClass(g_obj);
-//    jmethodID callFromNative = env->GetMethodID(cls, "callFromNative", "()V");
     jmethodID receiveRtmpData = env->GetMethodID(cls, "receiveRtmpData", "([B)V");
 
     int nRead = 0;
     int bufSize = 1024 * 1024 * 10;
     char *buf = (char *) malloc(bufSize);
-    FILE *fp = fopen("/data/data/com.live.mooselive/receive.mp4","wb");
+    FILE *fp = fopen("/data/data/com.live.mooselive/receive","wb");
     if (!fp) {
         __android_log_print(ANDROID_LOG_ERROR, "NATIVE", "创建文件失败");
     }
     jbyteArray byteArray = env->NewByteArray(bufSize);
     int countReadSize = 0;
     while(nRead = RTMP_Read(rtmp,buf,bufSize)) {
-//        env->SetByteArrayRegion(byteArray, 0, nRead, (jbyte *)buf);
-//        env->CallVoidMethod(g_obj, receiveRtmpData,byteArray);
+        env->SetByteArrayRegion(byteArray, 0, nRead, (jbyte *)buf);
+        env->CallVoidMethod(g_obj, receiveRtmpData,byteArray);
         fwrite(buf, 1, nRead, fp);
         countReadSize += nRead;
         __android_log_print(ANDROID_LOG_ERROR, "NATIVE", "本次读取数：%d  总读取数量：%d", nRead,
@@ -90,6 +88,9 @@ int connectRTMP(JNIEnv *env,char* url) {
         RTMP_Close(rtmp);
         return -1;
     }
+
+
+    __android_log_print(ANDROID_LOG_ERROR, "NATIVE", "RTMP 连接成功");
     receiveRTMPData(env);
     // 连接操作完成，开启线程接收数据
 //    pthread_create(&thread, nullptr, reinterpret_cast<void *(*)(void *)>(receiveRTMPData), nullptr);
@@ -112,7 +113,7 @@ Java_com_live_mooselive_activity_MainActivity_stringFromJNI(JNIEnv *env, jobject
 
 extern "C"
 JNIEXPORT void JNICALL
-Java_com_live_mooselive_activity_MainActivity_connectRTMP(JNIEnv *env, jobject thiz, jstring url) {
+Java_com_live_mooselive_activity_RTMPActivity_connectRTMP(JNIEnv *env, jobject thiz, jstring url) {
     const char* rtmpUrl = env->GetStringUTFChars(url, NULL);
     g_obj = env->NewGlobalRef(thiz);
     char *tmp = const_cast<char *>(rtmpUrl);

@@ -21,6 +21,12 @@
         android:layout_height="wrap_content"
         android:text="观看直播"/>
 
+    <Button
+        android:id="@+id/btn_rtmp_test"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="RTMP 测试"/>
+
     <ImageView
         android:id="@+id/iv_main"
         android:layout_width="match_parent"
