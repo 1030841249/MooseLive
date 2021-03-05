@@ -24,14 +24,21 @@ public class RTMPActivity extends BaseActivity {
 
     @Override
     protected void init() {
-
         new Thread(()->{
             connectRTMP("rtmp://58.200.131.2:1935/livetv/hunantv");
         }).start();
 
     }
 
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        closeRTMP();
+    }
+
     public native void connectRTMP(String url);
+
+    public native void closeRTMP();
 
 
     void callFromNative() {

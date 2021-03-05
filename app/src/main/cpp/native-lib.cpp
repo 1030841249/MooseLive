@@ -6,12 +6,11 @@
 #include "android/log.h"
 
 RTMP *rtmp = NULL;
-pthread_t thread;
 
 JavaVM *g_jvm;
 jobject g_obj;
 
-
+char* oneTag;
 
 
 void run() {
@@ -32,22 +31,30 @@ void receiveRTMPData(JNIEnv *env) {
     int nRead = 0;
     int bufSize = 1024 * 1024 * 10;
     char *buf = (char *) malloc(bufSize);
-    FILE *fp = fopen("/data/data/com.live.mooselive/receive","wb");
+    FILE *fp = fopen("/data/data/com.live.mooselive/receive.flv","wb");
     if (!fp) {
         __android_log_print(ANDROID_LOG_ERROR, "NATIVE", "创建文件失败");
     }
     jbyteArray byteArray = env->NewByteArray(bufSize);
     int countReadSize = 0;
+    int oneTagSize = 0;
     while(nRead = RTMP_Read(rtmp,buf,bufSize)) {
         env->SetByteArrayRegion(byteArray, 0, nRead, (jbyte *)buf);
         env->CallVoidMethod(g_obj, receiveRtmpData,byteArray);
         fwrite(buf, 1, nRead, fp);
         countReadSize += nRead;
+
+
+
         __android_log_print(ANDROID_LOG_ERROR, "NATIVE", "本次读取数：%d  总读取数量：%d", nRead,
                             countReadSize);
     }
 
     free(buf);
+}
+
+void judgeOneTag(char* tmpData) {
+
 }
 
 void releaseRTMP() {
@@ -118,4 +125,38 @@ Java_com_live_mooselive_activity_RTMPActivity_connectRTMP(JNIEnv *env, jobject t
     g_obj = env->NewGlobalRef(thiz);
     char *tmp = const_cast<char *>(rtmpUrl);
     connectRTMP(env,tmp);
+}extern "C"
+JNIEXPORT void JNICALL
+Java_com_live_mooselive_activity_RTMPActivity_closeRTMP(JNIEnv *env, jobject thiz) {
+    if(rtmp) {
+        RTMP_Free(rtmp);
+        RTMP_Close(rtmp);
+        rtmp = nullptr;
+        __android_log_print(ANDROID_LOG_ERROR,"NATIVE","关闭RTMP成功 ");
+    } else {
+
+    }
+}
+
+int sendAudioData(int8_t *data,jint len,long tms) {
+
+}
+
+int sendVideoData(){
+
+}
+
+
+extern "C"
+JNIEXPORT void JNICALL
+Java_com_live_mooselive_av_ScreenLive_sendData(JNIEnv *env, jobject thiz, jint type,
+                                               jbyteArray data, jint len, jlong tms) {
+    switch(type) {
+        case 0: // audio
+
+            break;
+        case 1: // video
+
+            break;
+    }
 }
