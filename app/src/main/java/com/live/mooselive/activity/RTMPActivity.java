@@ -1,5 +1,8 @@
 package com.live.mooselive.activity;
 
+import android.media.AudioFormat;
+import android.media.AudioRecord;
+import android.media.MediaRecorder;
 import android.widget.EditText;
 
 import com.live.mooselive.R;
@@ -24,9 +27,19 @@ public class RTMPActivity extends BaseActivity {
 
     @Override
     protected void init() {
-        new Thread(()->{
-            connectRTMP("rtmp://58.200.131.2:1935/livetv/hunantv");
-        }).start();
+        int audioSize = AudioRecord.getMinBufferSize(44100,
+                AudioFormat.CHANNEL_IN_MONO,
+                AudioFormat.ENCODING_PCM_16BIT);
+        AudioRecord audioRecord = new AudioRecord(
+                MediaRecorder.AudioSource.MIC,
+                44100,
+                AudioFormat.CHANNEL_IN_MONO,
+                AudioFormat.ENCODING_PCM_16BIT,
+                audioSize);
+//        new Thread(()->{
+//            connectRTMP("rtmp://live-push.bilivideo.com/live-bvc/?streamname=live_11852946_29221900&key=e8d63f1642891cfa3b342276147f62ca&schedule=rtmp");
+////            connectRTMP("rtmp://58.200.131.2:1935/livetv/cctv1");
+//        }).start();
 
     }
 

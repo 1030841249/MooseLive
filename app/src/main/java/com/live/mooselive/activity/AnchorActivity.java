@@ -21,7 +21,6 @@ import com.live.mooselive.base.BaseActivity;
 import butterknife.BindView;
 
 public class AnchorActivity extends BaseActivity {
-
     @Override
     protected int getLayoutId() {
         return R.layout.activity_anchor;
