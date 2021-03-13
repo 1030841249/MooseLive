@@ -101,15 +101,18 @@ public class ScreenVideo implements Runnable {
         if (mTimeStamp == 0) {
             mTimeStamp = System.currentTimeMillis();
         }
-//        if (System.currentTimeMillis() - mTimeStamp >= 5000) {
-//            Bundle bundle = new Bundle();
-//            bundle.putInt(MediaCodec.PARAMETER_KEY_REQUEST_SYNC_FRAME, 0);
-//            mCodec.setParameters(bundle);
-//            mTimeStamp = System.currentTimeMillis();
-//        }
+        if (System.currentTimeMillis() - mTimeStamp >= 5000) {
+            Bundle bundle = new Bundle();
+            bundle.putInt(MediaCodec.PARAMETER_KEY_REQUEST_SYNC_FRAME, 0);
+            mCodec.setParameters(bundle);
+            mTimeStamp = System.currentTimeMillis();
+        }
         int index = mCodec.dequeueOutputBuffer(mBufferInfo, 1000);
         if (index == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
             mFormat = mCodec.getOutputFormat();
+            if (mCallback != null) {
+                mCallback.onFormatChanged(mFormat);
+            }
         }
         if (index >= 0) {
             if (mStartTime == 0) {
@@ -123,7 +126,6 @@ public class ScreenVideo implements Runnable {
                     byte[] data = new byte[mBufferInfo.size - mBufferInfo.offset];
                     outputBuffer.get(data);
                     long tms = (mBufferInfo.presentationTimeUs / 1000) - mStartTime;
-                    mStartTime = mBufferInfo.presentationTimeUs / 1000;
                     mCallback.onEncodedVideo(data, tms);
                 }
             }

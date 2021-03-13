@@ -146,9 +146,6 @@ void splitSpsPps(Live *live,int8_t *buf,int len) {
 }
 
 int sendVideoSpsPps(Live *live) {
-    if (live && live->sps && live->pps) {
-        return -1;
-    }
     int body_size = 16 + live->sps_len + live->pps_len;
     RTMPPacket * packet = static_cast<RTMPPacket *>(malloc(sizeof(RTMPPacket)));
     RTMPPacket_Alloc(packet, body_size);
@@ -183,19 +180,20 @@ int sendVideoSpsPps(Live *live) {
     packet->m_body[i++] = (live->pps_len >> 8) & 0xff;    // ppsLength 长 2 字节
     packet->m_body[i++] = (live->pps_len) & 0xff;
     memcpy(&packet->m_body[i],live->pps,live->pps_len);     // pps
-    i +=  live->pps_len;
 
     // video
-    packet->m_packetType = RTMP_PACKET_TYPE_INFO;
+    packet->m_packetType = RTMP_PACKET_TYPE_VIDEO;
     packet->m_nBodySize = body_size;
     packet->m_nChannel = 0x04;
     packet->m_nTimeStamp = 0;
     packet->m_hasAbsTimestamp = 0;
     packet->m_headerType = RTMP_PACKET_SIZE_MEDIUM;
     packet->m_nInfoField2 = live->rtmp->m_stream_id;
-
     /*调用发送接口*/
-    int ret = RTMP_SendPacket(live->rtmp,packet,TRUE);
+    int ret = RTMP_SendPacket(live->rtmp,packet,0);
+    if(ret) {
+        LOGE("SPS&PPS 发送成功");
+    }
     RTMPPacket_Free(packet);
     free(packet);    //释放内存
     return ret;
@@ -253,7 +251,7 @@ int sendH264Packet(int8_t *buf, int len,long tms){
     packet->m_headerType = RTMP_PACKET_SIZE_LARGE;
     packet->m_nInfoField2 = live->rtmp->m_stream_id;
 
-    int ret = RTMP_SendPacket(live->rtmp,packet,TRUE);
+    int ret = RTMP_SendPacket(live->rtmp,packet,0);
 
     RTMPPacket_Free(packet);
     free(packet);
@@ -276,22 +274,16 @@ int sendVideoData(int8_t *buf, int len, long tms) {
         // 分割并保存 sps 和 pps
         LOGE("解析 SPS&PPS");
         splitSpsPps(live, buf, len);
-//        LOGE("发送SPS&PPS");
-//        ret = sendVideoSpsPps(live);
-//        if (!ret) {
-//            LOGE("ERROR sendH264Packet");
-//            return -1;
-//        }
+        sendVideoSpsPps(live);
     } else {
-        bool isKey = false;
         if ((buf[4] & 0x1F) == 5) { // 关键帧
             // 发送 sps 和 pps
 //            LOGE("发送SPS&PPS");
-            ret = sendVideoSpsPps(live);
-            if (!ret) {
-                LOGE("ERROR sendVideoSpsPps");
-                return -1;
-            }
+//            ret = sendVideoSpsPps(live);
+//            if (!ret) {
+//                LOGE("ERROR sendVideoSpsPps");
+//                return -1;
+//            }
         }
         // 发送帧
 //        LOGE("发送视频帧 是否为关键帧：%d",isKey);
@@ -365,12 +357,26 @@ int sendAudioData(int8_t *data, int len, long tms) {
 }
 
 
+extern "C"
+JNIEXPORT void JNICALL
+Java_com_live_mooselive_av_screen_ScreenLive_sendSPSPPS(JNIEnv *env, jobject thiz, jbyteArray data,
+                                                        jint len) {
+    jbyte *buf = env->GetByteArrayElements(data, 0);
+    if ((buf[4] & 0x1F) == 7) { // sps + pps, MediaCodec 编码出来的 sps 和 pps 在一起
+        // 分割并保存 sps 和 pps
+        LOGE("解析 SPS&PPS");
+        splitSpsPps(live, buf, len);
+        sendVideoSpsPps(live);
+    }
+}
+
+
 extern "C" {
 JNIEXPORT void JNICALL
 Java_com_live_mooselive_av_screen_ScreenLive_sendData(JNIEnv *env, jobject thiz, jint type,
-                                               jbyteArray data, jint len, jlong tms) {
+                                                      jbyteArray data, jint len, jlong tms) {
     jbyte *buf = env->GetByteArrayElements(data, 0);
-    switch(type) {
+    switch (type) {
         case 0: // video
             sendVideoData(buf, len, tms);
             break;
@@ -378,7 +384,6 @@ Java_com_live_mooselive_av_screen_ScreenLive_sendData(JNIEnv *env, jobject thiz,
             sendAudioHeader(buf, len, tms);
             break;
         case 2: // aac data
-            LOGE("发送音频数据，数据长度 %d  timestamp = %d  type = %d",len,tms,type);
             sendAudioData(buf, len, tms);
             break;
         default:
@@ -390,7 +395,7 @@ Java_com_live_mooselive_av_screen_ScreenLive_sendData(JNIEnv *env, jobject thiz,
 
 JNIEXPORT jint JNICALL
 Java_com_live_mooselive_av_screen_ScreenLive_connectRTMP(JNIEnv *env, jobject thiz, jstring url) {
-    const char* rtmpUrl = env->GetStringUTFChars(url,NULL);
+    const char *rtmpUrl = env->GetStringUTFChars(url, NULL);
 
     live = static_cast<Live *>(malloc(sizeof(Live)));
     live->rtmp = RTMP_Alloc();
@@ -403,12 +408,12 @@ Java_com_live_mooselive_av_screen_ScreenLive_connectRTMP(JNIEnv *env, jobject th
 
     RTMP_EnableWrite(live->rtmp); // 推送
 
-    if (!RTMP_Connect(live->rtmp,NULL)) {
+    if (!RTMP_Connect(live->rtmp, NULL)) {
         LOGE("RTMP_连接失败");
         RTMP_Free(live->rtmp);
         return -1;
     }
-    if (!RTMP_ConnectStream(live->rtmp,0)) {
+    if (!RTMP_ConnectStream(live->rtmp, 0)) {
         LOGE("RTMP_创建流失败");
         RTMP_Close(live->rtmp);
         RTMP_Free(live->rtmp);

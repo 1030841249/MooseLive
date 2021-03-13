@@ -5,10 +5,12 @@ import android.content.Context;
 import android.content.Intent;
 import android.hardware.display.DisplayManager;
 import android.hardware.display.VirtualDisplay;
+import android.media.MediaFormat;
 import android.media.projection.MediaProjection;
 import android.media.projection.MediaProjectionManager;
 import android.os.Build;
 import android.util.DisplayMetrics;
+import android.util.Log;
 
 import androidx.annotation.Nullable;
 import androidx.annotation.RequiresApi;
@@ -20,11 +22,14 @@ import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.nio.ByteBuffer;
 
 import static android.content.Context.MEDIA_PROJECTION_SERVICE;
 
 @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
 public class ScreenLive implements Runnable {
+
+    public static final String TAG = "ScreenLive";
 
     private static final int REQUEST_CODE = 0X01;
 
@@ -35,6 +40,7 @@ public class ScreenLive implements Runnable {
     public interface ScreenCodecCallback {
         void onEncodedVideo(byte[] data,long tms);
         void onEncodedAudio(byte[] data,long tms);
+        void onFormatChanged(MediaFormat mediaFormat);
     }
 
     static {
@@ -71,6 +77,7 @@ public class ScreenLive implements Runnable {
         mCallback = new ScreenCodecCallback() {
             @Override
             public void onEncodedVideo(byte[] data, long tms) {
+                LogUtil.e(TAG,"Video tms " + tms);
                 sendData(RTMP_TYPE_VIDEO, data, data.length, tms);
                 try {
                     outputStream.write(data);
@@ -87,6 +94,20 @@ public class ScreenLive implements Runnable {
                     return;
                 }
                 sendData(RTMP_TYPE_AUDIO_DATA, data, data.length, tms);
+            }
+
+            @Override
+            public void onFormatChanged(MediaFormat mediaFormat) {
+//                ByteBuffer byteBuffer = mediaFormat.getByteBuffer("csd-0");
+//                byte[] sps = new byte[byteBuffer.remaining()];
+//                byteBuffer.get(sps);
+//                byteBuffer = mediaFormat.getByteBuffer("csd-1");
+//                byte[] pps = new byte[byteBuffer.remaining()];
+//                byteBuffer.get(pps);
+//                byte[] buffer = new byte[sps.length + pps.length];
+//                System.arraycopy(sps, 0, buffer, 0, sps.length);
+//                System.arraycopy(pps, 0, buffer, sps.length, pps.length);
+//                sendSPSPPS(buffer,buffer.length);
             }
         };
 //        mFile = new File("/data/data/com.live.mooselive/projection.h264");
@@ -109,10 +130,10 @@ public class ScreenLive implements Runnable {
 
     private void initMediaProjection() {
         DisplayMetrics displayMetrics = mContext.getResources().getDisplayMetrics();
-//        width = displayMetrics.widthPixels;
-//        height = displayMetrics.heightPixels;
-        width = 480;
-        height = 720;
+        width = displayMetrics.widthPixels;
+        height = displayMetrics.heightPixels;
+//        width = 480;
+//        height = 720;
         mediaProjectionManager = (MediaProjectionManager) mContext.getSystemService(MEDIA_PROJECTION_SERVICE);
         Intent screenIntent = mediaProjectionManager.createScreenCaptureIntent();
         ((Activity)mContext).startActivityForResult(screenIntent,REQUEST_CODE);
@@ -171,4 +192,6 @@ public class ScreenLive implements Runnable {
     private native int closeRTMP();
 
     public native void sendData(int type,byte[] data,int len,long tms);
+
+    private native void sendSPSPPS(byte[] data,int len);
 }

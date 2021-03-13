@@ -21,6 +21,13 @@
         android:layout_height="wrap_content"
         android:text="观看直播"/>
 
+    <EditText
+        android:id="@+id/et_main_rtmp_addr"
+        android:hint="RTMP 推流地址"
+        android:text=""
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content" />
+
     <Button
         android:id="@+id/btn_mediaProjection"
         android:layout_width="match_parent"
