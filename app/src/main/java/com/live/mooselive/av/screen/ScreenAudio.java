@@ -2,7 +2,6 @@ package com.live.mooselive.av.screen;
 
 import android.media.AudioFormat;
 import android.media.AudioRecord;
-import android.media.AudioTrack;
 import android.media.MediaCodec;
 import android.media.MediaCodecInfo;
 import android.media.MediaFormat;
@@ -15,6 +14,7 @@ import java.nio.ByteBuffer;
 
 public class ScreenAudio implements Runnable {
 
+    private static final String TAG = "ScreenAudio";
     private MediaCodec mCodec;
     private MediaFormat mFormat;
     private AudioRecord mAudioRecord;
@@ -24,7 +24,8 @@ public class ScreenAudio implements Runnable {
     private ScreenLive.ScreenCodecCallback mCallback;
 
     private boolean isRunning = true;
-    private long mStartTime = 0;
+    private long mAudioPTS = 0;
+    private long mStarTime = 0;
 
     private int mBufferSizeInBytes;
 
@@ -38,6 +39,9 @@ public class ScreenAudio implements Runnable {
             initConfiguration();
             mCodec = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_AUDIO_AAC);
             mCodec.configure(mFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
+            mCodec.start();
+            mInputBuffers = mCodec.getInputBuffers();
+            mOutputBuffers = mCodec.getOutputBuffers();
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -48,13 +52,11 @@ public class ScreenAudio implements Runnable {
         int channelConfig = AudioFormat.CHANNEL_IN_MONO;
         int format = AudioFormat.ENCODING_PCM_16BIT;
         mBufferSizeInBytes = AudioRecord.getMinBufferSize(sampleRate, channelConfig, format);
+        mFormat = MediaFormat.createAudioFormat(MediaFormat.MIMETYPE_AUDIO_AAC, sampleRate, 1);
+        mFormat.setInteger(MediaFormat.KEY_BIT_RATE, sampleRate * 2);
+        mFormat.setInteger(MediaFormat.KEY_AAC_PROFILE, MediaCodecInfo.CodecProfileLevel.AACObjectLC);
         mAudioRecord = new AudioRecord(MediaRecorder.AudioSource.MIC,
                 sampleRate, channelConfig, AudioFormat.ENCODING_PCM_16BIT, mBufferSizeInBytes);
-        LogUtil.e("ScreenAudio","audiorecodr state " + mAudioRecord.getState());
-
-        mFormat = MediaFormat.createAudioFormat(MediaFormat.MIMETYPE_AUDIO_AAC, sampleRate, 1);
-        mFormat.setInteger(MediaFormat.KEY_BIT_RATE,99600);
-        mFormat.setInteger(MediaFormat.KEY_AAC_PROFILE, MediaCodecInfo.CodecProfileLevel.AACObjectLC);
     }
 
     @Override
@@ -73,24 +75,20 @@ public class ScreenAudio implements Runnable {
                 int index = mCodec.dequeueInputBuffer(10);
                 if (index >= 0) {
                     ByteBuffer inputBuffer = mInputBuffers[index];
-                    inputBuffer.put(buffer);
                     inputBuffer.limit(readNums);
-                    mCodec.queueInputBuffer(index, 0, readNums, 0, 0);
+                    inputBuffer.put(buffer);
+                    mCodec.queueInputBuffer(index, 0, readNums, getAudioPts(readNums,44100), 0);
                 }
                 MediaCodec.BufferInfo bufferInfo = new MediaCodec.BufferInfo();
                 index = mCodec.dequeueOutputBuffer(bufferInfo, 0);
                 if (index >= 0) {
-                    if (mStartTime == 0) {
-                        mStartTime = bufferInfo.presentationTimeUs / 1000;
-                    }
                     ByteBuffer outputBuffer = mOutputBuffers[index];
                     outputBuffer.position(bufferInfo.offset);
                     byte[] audio = new byte[bufferInfo.size];
                     outputBuffer.get(audio);
                     if (mCallback != null) {
-                        long tms = bufferInfo.presentationTimeUs / 1000 - mStartTime;
-                        mStartTime = bufferInfo.presentationTimeUs / 1000;
-                        mCallback.onEncodedAudio(audio,20);
+                        LogUtil.e(TAG,"maudioPTs " + bufferInfo.presentationTimeUs/1000);
+                        mCallback.onEncodedAudio(audio, bufferInfo.presentationTimeUs /1000);
                     }
                     mCodec.releaseOutputBuffer(index,false);
                 }
@@ -98,11 +96,13 @@ public class ScreenAudio implements Runnable {
         }
     }
 
+    private long getAudioPts(int size, int sampleRate) {
+        mAudioPTS += (long) (1.0 * size / (sampleRate * 2) * 1000000.0);
+        return mAudioPTS;
+    }
+
     public void start() {
-        mCodec.start();
         mAudioRecord.startRecording();
-        mInputBuffers = mCodec.getInputBuffers();
-        mOutputBuffers = mCodec.getOutputBuffers();
         new Thread(this).start();
     }
 

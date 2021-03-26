@@ -15,9 +15,10 @@ import java.nio.ByteBuffer;
 
 public class ScreenVideo implements Runnable {
 
-    private final int BIT_RATE = 800000;
+    private static final String TAG = "ScreenVideo";
+    private final int BIT_RATE = 950000;
     private final int FRAME_RATE = 15;
-    private final int I_FRAME_INTERVAL = 5;
+    private final int I_FRAME_INTERVAL = 3;
 
 
     private MediaCodec mCodec;
@@ -30,7 +31,7 @@ public class ScreenVideo implements Runnable {
 
     int mWidth, mHeight;
 
-    private long mStartTime;
+    public static long mCurFramePTS, mPreviousFramePTS; // 单元毫秒
     private long mTimeStamp;
 
     VideoExtracotr videoExtracotr;
@@ -101,11 +102,14 @@ public class ScreenVideo implements Runnable {
         if (mTimeStamp == 0) {
             mTimeStamp = System.currentTimeMillis();
         }
-        if (System.currentTimeMillis() - mTimeStamp >= 5000) {
+        if (System.currentTimeMillis() - mTimeStamp >= (I_FRAME_INTERVAL*1000)) {
             Bundle bundle = new Bundle();
             bundle.putInt(MediaCodec.PARAMETER_KEY_REQUEST_SYNC_FRAME, 0);
             mCodec.setParameters(bundle);
             mTimeStamp = System.currentTimeMillis();
+        }
+        if (mCodec == null) {
+            return;
         }
         int index = mCodec.dequeueOutputBuffer(mBufferInfo, 1000);
         if (index == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
@@ -115,8 +119,11 @@ public class ScreenVideo implements Runnable {
             }
         }
         if (index >= 0) {
-            if (mStartTime == 0) {
-                mStartTime = mBufferInfo.presentationTimeUs / 1000; // 微妙转换为毫秒
+            if (mCurFramePTS == 0) {
+//                mCurFramePTS = System.currentTimeMillis(); // 以系统时间为基准
+            }
+            if (mPreviousFramePTS == 0) {
+                mPreviousFramePTS = mBufferInfo.presentationTimeUs / 1000; // 微妙转换为毫秒
             }
             if (mBufferInfo.offset < mBufferInfo.size) {
                 ByteBuffer outputBuffer = mOutputBuffers[index];
@@ -125,8 +132,13 @@ public class ScreenVideo implements Runnable {
                 if (mCallback != null) {
                     byte[] data = new byte[mBufferInfo.size - mBufferInfo.offset];
                     outputBuffer.get(data);
-                    long tms = (mBufferInfo.presentationTimeUs / 1000) - mStartTime;
-                    mCallback.onEncodedVideo(data, tms);
+                    long diffTms = (mBufferInfo.presentationTimeUs / 1000) - mPreviousFramePTS; // 两帧之差
+                    mPreviousFramePTS = mBufferInfo.presentationTimeUs / 1000;
+                    mCurFramePTS += diffTms;
+//                    LogUtil.e(TAG, "before modify , the video tms is " + diffTms + "  framepts " + mCurFramePTS);
+                    LogUtil.e(TAG, "before modify , the video mCurFramePTS is " + mCurFramePTS);
+
+                    mCallback.onEncodedVideo(data, mCurFramePTS);
                 }
             }
             mCodec.releaseOutputBuffer(index, false);
@@ -144,6 +156,10 @@ public class ScreenVideo implements Runnable {
         mFormat = null;
         mSurface = null;
         mOutputBuffers = null;
+    }
+
+    public boolean isRunning() {
+        return isRunning;
     }
 
     public Surface getSurface() {

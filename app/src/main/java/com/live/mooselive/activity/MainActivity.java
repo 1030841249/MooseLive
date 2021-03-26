@@ -3,18 +3,33 @@ package com.live.mooselive.activity;
 import androidx.annotation.Nullable;
 
 import android.content.Intent;
+import android.graphics.PixelFormat;
+import android.net.Uri;
 import android.os.Build;
+import android.provider.Settings;
 import android.text.TextUtils;
+import android.view.Gravity;
+import android.view.LayoutInflater;
+import android.view.MotionEvent;
 import android.view.View;
+import android.view.Window;
+import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageView;
+import android.widget.PopupWindow;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import com.live.mooselive.R;
 import com.live.mooselive.av.screen.ScreenLive;
 import com.live.mooselive.base.BaseActivity;
 import com.live.mooselive.utils.PermissionUtil;
+
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 
 import butterknife.BindView;
 import butterknife.OnClick;
@@ -33,8 +48,8 @@ public class MainActivity extends BaseActivity {
     ImageView ivMain;
     @BindView(R.id.et_main_rtmp_addr)
     EditText etRTMPAddr;
-
     ScreenLive screenLive;
+
 
     @Override
     protected int getLayoutId() {
@@ -43,8 +58,17 @@ public class MainActivity extends BaseActivity {
 
     @Override
     protected void init() {
+//        PermissionUtil.requestRecordAudioPermission(this);
         PermissionUtil.requestWRPermissions(this);
-        etRTMPAddr.setText("rtmp://tx.direct.huya.com/huyalive/1640117789-1640117789-0-3280359034-10057-A-1615440186-1?seq=1615440187407&type=simple");
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            if (!Settings.canDrawOverlays(this)) {
+                Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                        Uri.parse("package:" + getPackageName()));
+                startActivityForResult(intent,123);
+            }
+        }
+        etRTMPAddr.setText("rtmp://live-push.bilivideo.com/live-bvc/?streamname=live_11852946_29221900&key=e8d63f1642891cfa3b342276147f62ca&schedule=rtmp");
+//        etRTMPAddr.setText("rtmp://tx.direct.huya.com/huyalive/1640117789-1640117789-0-3280359034-10057-A-1615440186-1?seq=1615440187407&type=simple");
     }
 
     @OnClick({R.id.btn_anchor, R.id.btn_audience,R.id.btn_rtmp_test,R.id.btn_mediaProjection})
@@ -84,8 +108,6 @@ public class MainActivity extends BaseActivity {
                 } else {
                     Toast.makeText(this, "请输入 RTMP 推流地址", Toast.LENGTH_SHORT).show();
                 }
-//                screenLive = new ScreenLive(this,"rtmp://tx.direct.huya.com/huyalive/1640117789-1640117789-0-3280359034-10057-A-1615440186-1?seq=1615440187407&type=simple");
-//                screenLive = new ScreenLive(this,"rtmp://live-push.bilivideo.com/live-bvc/?streamname=live_11852946_29221900&key=e8d63f1642891cfa3b342276147f62ca&schedule=rtmp");
             }
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
@@ -93,11 +115,15 @@ public class MainActivity extends BaseActivity {
         }
     }
 
+
     @Override
     protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            screenLive.onActivityResult(requestCode, resultCode, data);
+            if (screenLive != null) {
+                screenLive.onActivityResult(requestCode, resultCode, data);
+            }
         }
+
     }
 }

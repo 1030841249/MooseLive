@@ -115,7 +115,17 @@ Java_com_live_mooselive_activity_RTMPActivity_closeRTMP(JNIEnv *env, jobject thi
 }
 }
 
-
+int sendPacket(RTMP *rtmp, RTMPPacket* packet) {
+    int ret = -1;
+    if (rtmp && RTMP_IsConnected(rtmp)) {
+        // 防止关闭RTMP连接时报错
+        packet->m_nInfoField2 = rtmp->m_stream_id;
+        ret = RTMP_SendPacket(rtmp, packet, 0);
+    }
+    RTMPPacket_Free(packet);
+    free(packet);    //释放内存
+    return ret;
+}
 
 // MediaCodec中，sps和 pps数据在一起，所以为了发送分割 sps 和 pps
 void splitSpsPps(Live *live,int8_t *buf,int len) {
@@ -188,15 +198,8 @@ int sendVideoSpsPps(Live *live) {
     packet->m_nTimeStamp = 0;
     packet->m_hasAbsTimestamp = 0;
     packet->m_headerType = RTMP_PACKET_SIZE_MEDIUM;
-    packet->m_nInfoField2 = live->rtmp->m_stream_id;
     /*调用发送接口*/
-    int ret = RTMP_SendPacket(live->rtmp,packet,0);
-    if(ret) {
-        LOGE("SPS&PPS 发送成功");
-    }
-    RTMPPacket_Free(packet);
-    free(packet);    //释放内存
-    return ret;
+    return sendPacket(live->rtmp,packet);
 }
 
 /**
@@ -249,13 +252,7 @@ int sendH264Packet(int8_t *buf, int len,long tms){
     packet->m_nTimeStamp = tms;
     packet->m_nChannel = 0x04; // csid
     packet->m_headerType = RTMP_PACKET_SIZE_LARGE;
-    packet->m_nInfoField2 = live->rtmp->m_stream_id;
-
-    int ret = RTMP_SendPacket(live->rtmp,packet,0);
-
-    RTMPPacket_Free(packet);
-    free(packet);
-    return ret;
+    return sendPacket(live->rtmp,packet);
 }
 
 /**
@@ -278,21 +275,17 @@ int sendVideoData(int8_t *buf, int len, long tms) {
     } else {
         if ((buf[4] & 0x1F) == 5) { // 关键帧
             // 发送 sps 和 pps
-//            LOGE("发送SPS&PPS");
-//            ret = sendVideoSpsPps(live);
-//            if (!ret) {
-//                LOGE("ERROR sendVideoSpsPps");
-//                return -1;
-//            }
+            ret = sendVideoSpsPps(live);
+            if (!ret) {
+                LOGE("ERROR sendVideoSpsPps");
+                return -1;
+            }
         }
         // 发送帧
-//        LOGE("发送视频帧 是否为关键帧：%d",isKey);
         ret = sendH264Packet(buf,len,tms);
         if (!ret) {
             LOGE("ERROR sendH264Packet");
             return ret;
-        } else {
-//            LOGE("发送视频帧完成");
         }
     }
     return ret;
@@ -320,11 +313,7 @@ int sendAudioHeader(int8_t *data, int len, long tms) {
     packet->m_nTimeStamp = 0;
     packet->m_nChannel = 0x05; // 视频 04，音频 05
     packet->m_headerType = RTMP_PACKET_SIZE_MEDIUM;
-    packet->m_nInfoField2 = live->rtmp->m_stream_id;
-    int ret = RTMP_SendPacket(live->rtmp,packet,TRUE);
-    RTMPPacket_Free(packet);
-    free(packet);
-    return ret;
+    return sendPacket(live->rtmp,packet);
 }
 
 /**
@@ -349,27 +338,8 @@ int sendAudioData(int8_t *data, int len, long tms) {
     packet->m_nTimeStamp = tms;
     packet->m_nChannel = 0x05; // 视频 04，音频 05
     packet->m_headerType = RTMP_PACKET_SIZE_LARGE;
-    packet->m_nInfoField2 = live->rtmp->m_stream_id;
-    int ret = RTMP_SendPacket(live->rtmp,packet,TRUE);
-    RTMPPacket_Free(packet);
-    free(packet);
-    return ret;
+    return sendPacket(live->rtmp,packet);
 }
-
-
-extern "C"
-JNIEXPORT void JNICALL
-Java_com_live_mooselive_av_screen_ScreenLive_sendSPSPPS(JNIEnv *env, jobject thiz, jbyteArray data,
-                                                        jint len) {
-    jbyte *buf = env->GetByteArrayElements(data, 0);
-    if ((buf[4] & 0x1F) == 7) { // sps + pps, MediaCodec 编码出来的 sps 和 pps 在一起
-        // 分割并保存 sps 和 pps
-        LOGE("解析 SPS&PPS");
-        splitSpsPps(live, buf, len);
-        sendVideoSpsPps(live);
-    }
-}
-
 
 extern "C" {
 JNIEXPORT void JNICALL
@@ -385,9 +355,6 @@ Java_com_live_mooselive_av_screen_ScreenLive_sendData(JNIEnv *env, jobject thiz,
             break;
         case 2: // aac data
             sendAudioData(buf, len, tms);
-            break;
-        default:
-
             break;
     }
     env->ReleaseByteArrayElements(data, buf, 0);
@@ -429,7 +396,9 @@ JNIEXPORT jint JNICALL
 Java_com_live_mooselive_av_screen_ScreenLive_closeRTMP(JNIEnv *env, jobject thiz) {
     if (live) {
         if (live->rtmp) {
-//            RTMP_Close(live->rtmp);
+            if (RTMP_IsConnected(live->rtmp)) {
+//                RTMP_Close(live->rtmp);
+            }
             RTMP_Free(live->rtmp);
         }
         live->rtmp = NULL;
