@@ -7,7 +7,11 @@ import android.media.MediaFormat;
 import com.live.mooselive.utils.RTMPUtil;
 import com.live.mooselive.utils.YUVUtil;
 
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.util.Deque;
 import java.util.LinkedList;
@@ -24,9 +28,12 @@ public class CameraEncoder implements Runnable{
     private boolean isRunning = true;
     private int mFrameCount = 0;
 
+    int width = 1920;
+    int height = 1080;
 
     public CameraEncoder(int width,int height) {
-
+        this.width = width;
+        this.height = height;
         try {
             mEncoder = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_AVC);
             initConfigure(width,height);
@@ -53,7 +60,8 @@ public class CameraEncoder implements Runnable{
             byte[] frame = mFrameLists.getFirst();
             if (frame != null) {
                 mFrameCount ++;
-                frame = YUVUtil.convertNV21ToNV12(frame);
+                frame = YUVUtil.convertNV21ToNV12(frame,width,height);
+                frame = YUVUtil.rotateYUV240SP(frame,width,height);
                 encodeFrame(frame);
             }
         }
@@ -71,8 +79,8 @@ public class CameraEncoder implements Runnable{
         index = mEncoder.dequeueOutputBuffer(bufferInfo, 0);
         while (index >= 0) {
             byteBuffer = mOutputBuffers[index];
-            byteBuffer.position(bufferInfo.offset);
-            byte[] video = new byte[bufferInfo.size - bufferInfo.offset];
+//            byteBuffer.position(bufferInfo.offset);
+            byte[] video = new byte[bufferInfo.size];
             byteBuffer.get(video);
             RTMPUtil.sendData(RTMPUtil.RTMP_TYPE_VIDEO, video, video.length, bufferInfo.presentationTimeUs / 1000);
             mEncoder.releaseOutputBuffer(index,false);

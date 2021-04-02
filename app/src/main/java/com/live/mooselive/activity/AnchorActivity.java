@@ -47,7 +47,7 @@ public class AnchorActivity extends BaseActivity {
         sfvAnchor.getHolder().addCallback(new SurfaceHolder.Callback() {
             @Override
             public void surfaceCreated(SurfaceHolder holder) {
-                cameraUtil = new CameraLive(holder);
+                cameraUtil = new CameraLive(AnchorActivity.this,holder);
             }
 
             @Override

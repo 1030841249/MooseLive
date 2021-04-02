@@ -1,9 +1,11 @@
 package com.live.mooselive.av.camera;
 
 
+import android.app.Activity;
 import android.content.pm.PackageManager;
 import android.graphics.ImageFormat;
 import android.hardware.Camera;
+import android.view.Surface;
 import android.view.SurfaceHolder;
 
 import com.live.mooselive.App;
@@ -24,6 +26,7 @@ public class CameraLive {
 
     private int mCameraId = CAMERA_FACING_BACK;
     private Camera mCamera;
+    private Activity mActivity;
     private SurfaceHolder mSurfaceHolder;
     private int mWidth = 1920;
     private int mHeight = 1080;
@@ -43,11 +46,12 @@ public class CameraLive {
         }
     };
 
-    public CameraLive(SurfaceHolder surfaceHolder) {
+    public CameraLive(Activity activity,SurfaceHolder surfaceHolder) {
         mScheduledExecutorService = Executors.newScheduledThreadPool(2);
         if (!checkCamera()) {
             return;
         }
+        mActivity = activity;
         mSurfaceHolder =surfaceHolder;
         initCamera();
         mCameraEncoder = new CameraEncoder(mWidth,mHeight);
@@ -72,16 +76,18 @@ public class CameraLive {
             parameters.setFocusMode(Camera.Parameters.FOCUS_MODE_CONTINUOUS_PICTURE);
         }
         parameters.setPreviewSize(mWidth,mHeight);
+        parameters.setPictureSize(mWidth,mHeight);
         parameters.setPreviewFormat(ImageFormat.NV21);
         mCamera.setParameters(parameters);
         initPreviewBuffer();
     }
 
     private void initPreviewBuffer() {
-//        Camera.Size size = mCamera.getParameters().getPreviewSize();
-//        mWidth = size.width;
-//        mHeight = size.height;
-        mPreviewBuffer = new byte[mWidth * mHeight * 3 / 2];
+        Camera.Size size = mCamera.getParameters().getPreviewSize();
+        mWidth = size.width;
+        mHeight = size.height;
+//        mPreviewBuffer = new byte[mWidth * mHeight * 4];
+        mPreviewBuffer =  new byte[mWidth * mHeight * ImageFormat.getBitsPerPixel(ImageFormat.NV21) / 8];
         mCamera.addCallbackBuffer(mPreviewBuffer);
     }
 
@@ -123,28 +129,28 @@ public class CameraLive {
         }
     }
 
-    public static void setCameraDisplayOrientation(
+    public void setCameraDisplayOrientation(
             int cameraId, android.hardware.Camera camera) {
         android.hardware.Camera.CameraInfo info =
                 new android.hardware.Camera.CameraInfo();
         android.hardware.Camera.getCameraInfo(cameraId, info);
-//        int rotation = activity.getWindowManager().getDefaultDisplay()
-//                .getRotation();
+        int rotation = mActivity.getWindowManager().getDefaultDisplay()
+                .getRotation();
         int degrees = 0;
-//        switch (rotation) {
-//            case Surface.ROTATION_0:
-//                degrees = 0;
-//                break;
-//            case Surface.ROTATION_90:
-//                degrees = 90;
-//                break;
-//            case Surface.ROTATION_180:
-//                degrees = 180;
-//                break;
-//            case Surface.ROTATION_270:
-//                degrees = 270;
-//                break;
-//        }
+        switch (rotation) {
+            case Surface.ROTATION_0:
+                degrees = 0;
+                break;
+            case Surface.ROTATION_90:
+                degrees = 90;
+                break;
+            case Surface.ROTATION_180:
+                degrees = 180;
+                break;
+            case Surface.ROTATION_270:
+                degrees = 270;
+                break;
+        }
 
         int result;
         if (info.facing == Camera.CameraInfo.CAMERA_FACING_FRONT) {
@@ -153,6 +159,6 @@ public class CameraLive {
         } else {  // back-facing
             result = (info.orientation - degrees + 360) % 360;
         }
-        camera.setDisplayOrientation(90);
+        camera.setDisplayOrientation(result);
     }
 }
