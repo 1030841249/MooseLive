@@ -6,4 +6,36 @@
     android:layout_height="match_parent"
     tools:context=".activity.AnchorActivity">
 
+    <SurfaceView
+        android:id="@+id/sfv_anchor"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        app:layout_constraintBottom_toBottomOf="@+id/sfv_anchor"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        android:layout_marginBottom="30dp"
+        android:gravity="center"
+        android:orientation="horizontal">
+
+        <Button
+            android:id="@+id/btn_switch_camera"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="切换摄像头" />
+
+        <Button
+            android:id="@+id/btn_anchor_start_live"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="开始直播"
+            android:layout_marginLeft="20dp"/>
+
+    </LinearLayout>
+
+        android:layout_height="wrap_content" />
+
 </androidx.constraintlayout.widget.ConstraintLayout>

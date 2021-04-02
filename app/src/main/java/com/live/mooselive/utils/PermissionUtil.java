@@ -18,15 +18,8 @@ public class PermissionUtil {
                 Manifest.permission.WRITE_EXTERNAL_STORAGE,Manifest.permission.RECORD_AUDIO,Manifest.permission.CAPTURE_AUDIO_OUTPUT},1);
     }
 
-    public static void requestRecordAudioPermission(Activity activity) {
-        String[] permission = {Manifest.permission.RECORD_AUDIO};
-        if (ActivityCompat.checkSelfPermission(activity, permission[0]) != PackageManager.PERMISSION_GRANTED) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                activity.requestPermissions(permission,2);
-            } else {
-                ActivityCompat.requestPermissions(activity, permission, 2);
-            }
-        }
+    public static void requestCamera(Activity activity) {
+        ActivityCompat.requestPermissions(activity, new String[]{Manifest.permission.CAMERA}, 2);
     }
 
 }

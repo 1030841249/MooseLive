@@ -16,7 +16,7 @@ import java.nio.ByteBuffer;
 public class ScreenVideo implements Runnable {
 
     private static final String TAG = "ScreenVideo";
-    private final int BIT_RATE = 950000;
+    private final int BIT_RATE = 95000;
     private final int FRAME_RATE = 15;
     private final int I_FRAME_INTERVAL = 3;
 
@@ -132,11 +132,12 @@ public class ScreenVideo implements Runnable {
                 if (mCallback != null) {
                     byte[] data = new byte[mBufferInfo.size - mBufferInfo.offset];
                     outputBuffer.get(data);
-                    long diffTms = (mBufferInfo.presentationTimeUs / 1000) - mPreviousFramePTS; // 两帧之差
-                    mPreviousFramePTS = mBufferInfo.presentationTimeUs / 1000;
+                    long pts = mBufferInfo.presentationTimeUs / 1000;
+                    long diffTms = (pts) - mPreviousFramePTS; // 两帧之差
+                    mPreviousFramePTS = pts;
                     mCurFramePTS += diffTms;
 //                    LogUtil.e(TAG, "before modify , the video tms is " + diffTms + "  framepts " + mCurFramePTS);
-                    LogUtil.e(TAG, "before modify , the video mCurFramePTS is " + mCurFramePTS);
+//                    LogUtil.e(TAG, "before modify , the video mCurFramePTS is " + mCurFramePTS);
 
                     mCallback.onEncodedVideo(data, mCurFramePTS);
                 }

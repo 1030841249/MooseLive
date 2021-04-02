@@ -27,6 +27,7 @@ import androidx.annotation.RequiresApi;
 import com.live.mooselive.R;
 import com.live.mooselive.av.bean.RTMPPacket;
 import com.live.mooselive.utils.LogUtil;
+import com.live.mooselive.utils.RTMPUtil;
 import com.live.mooselive.utils.ToastUtil;
 
 import java.text.SimpleDateFormat;
@@ -37,6 +38,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 
 import static android.content.Context.MEDIA_PROJECTION_SERVICE;
+import static com.live.mooselive.utils.RTMPUtil.*;
 
 @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
 public class ScreenLive implements Runnable {
@@ -44,10 +46,6 @@ public class ScreenLive implements Runnable {
     public static final String TAG = "ScreenLive";
 
     private static final int REQUEST_CODE = 0X01;
-
-    private static final int RTMP_TYPE_VIDEO = 0X00;
-    private static final int RTMP_TYPE_ADUIO_HEADER = 0X01;
-    private static final int RTMP_TYPE_AUDIO_DATA = 0X02;
 
     public interface ScreenCodecCallback {
         void onEncodedVideo(byte[] data, long tms);
@@ -75,7 +73,7 @@ public class ScreenLive implements Runnable {
     // 判断音频和视频帧的时间戳差异，并发送到RTMP
     private Runnable mTask;
     private float mPTSGen = 0;
-    private float mOffset = 10;
+    private float mOffset = 20;
 
 
     private Handler mCountTimeHander;
@@ -91,7 +89,8 @@ public class ScreenLive implements Runnable {
 
     SimpleDateFormat simpleDateFormat;
     private long mStartTime = 0;
-    private long mModifyVideoTime;
+    // 已缩减的视频帧时间戳，之后的视频帧pts都需要在减去这个数值后计算，避免时间戳修改后还是使用原时间戳计算
+    public static long mModifyVideoTime;
 
     Context mContext;
 
@@ -146,25 +145,23 @@ public class ScreenLive implements Runnable {
                         audio = mAudioFrames.getFirst();
                     }
                     if (video != null && audio != null) {
-//                        LogUtil.e(TAG,"before modify , the video tms is " + video.tms);
                         float diff = 0;
-                        if ((video.tms - audio.tms) > 80L) {
-                            diff = ((video.tms - audio.tms) / 2 - mOffset);
+                        if ((video.tms - audio.tms) >= 60L) {
+                            diff = ((video.tms - audio.tms)/10*8);
+                            LogUtil.e(TAG,"video&audio difference " + ((video.tms - audio.tms)/10*8));
+                            mModifyVideoTime += diff;
                             video.tms -= diff;
-                            LogUtil.e(TAG,"after modify , the video tms is " + video.tms);
-
                         }
-                        mModifyVideoTime += diff;
                         // 时间戳小的先发送
                         if (video.tms < audio.tms) {
 //                            LogUtil.e(TAG,"发送视频帧 tms " + video.tms);
+                            mVideoFrames.removeFirst();
+                            RTMPUtil.sendData(video.type, video.data, video.len, video.tms);
                         } else {
 //                            LogUtil.e(TAG,"发送音频帧 tms " + audio.tms);
+                            mAudioFrames.removeFirst();
+                            RTMPUtil.sendData(audio.type, audio.data, audio.len, audio.tms);
                         }
-                        mVideoFrames.removeFirst();
-                        sendData(video.type, video.data, video.len, video.tms);
-                        mAudioFrames.removeFirst();
-                        sendData(audio.type, audio.data, audio.len, audio.tms);
                     }
                 }
             }
@@ -214,7 +211,7 @@ public class ScreenLive implements Runnable {
 
     @Override
     public void run() {
-        if (connectRTMP(mUrl) == 1) {
+        if (RTMPUtil.connectRTMP(mUrl) == 1) {
             ToastUtil.showShortToast("RTMP推流连接成功");
             LogUtil.e("ScreenLive", "RTMP 连接成功");
             // 连接成功后开始编码，并传输数据
@@ -238,7 +235,7 @@ public class ScreenLive implements Runnable {
     public void stopLive() {
         isFirstAudio = true;
         mStartTime = 0;
-        closeRTMP();
+        RTMPUtil.closeRTMP();
         if (mediaProjection != null) {
             mediaProjection.stop();
         }
@@ -328,9 +325,4 @@ public class ScreenLive implements Runnable {
         mCountTimeHander.postDelayed(runnable, 1000);
     }
 
-    private native int connectRTMP(String url);
-
-    private native int closeRTMP();
-
-    public native void sendData(int type, byte[] data, int len, long tms);
 }

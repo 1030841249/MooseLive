@@ -87,7 +87,7 @@ public class ScreenAudio implements Runnable {
                     byte[] audio = new byte[bufferInfo.size];
                     outputBuffer.get(audio);
                     if (mCallback != null) {
-                        LogUtil.e(TAG,"maudioPTs " + bufferInfo.presentationTimeUs/1000);
+//                        LogUtil.e(TAG,"maudioPTs " + bufferInfo.presentationTimeUs/1000);
                         mCallback.onEncodedAudio(audio, bufferInfo.presentationTimeUs /1000);
                     }
                     mCodec.releaseOutputBuffer(index,false);

@@ -342,26 +342,76 @@ int sendAudioData(int8_t *data, int len, long tms) {
 }
 
 extern "C" {
-JNIEXPORT void JNICALL
-Java_com_live_mooselive_av_screen_ScreenLive_sendData(JNIEnv *env, jobject thiz, jint type,
-                                                      jbyteArray data, jint len, jlong tms) {
-    jbyte *buf = env->GetByteArrayElements(data, 0);
-    switch (type) {
-        case 0: // video
-            sendVideoData(buf, len, tms);
-            break;
-        case 1: // aac header
-            sendAudioHeader(buf, len, tms);
-            break;
-        case 2: // aac data
-            sendAudioData(buf, len, tms);
-            break;
-    }
-    env->ReleaseByteArrayElements(data, buf, 0);
-}
+    JNIEXPORT jint JNICALL
+    Java_com_live_mooselive_utils_RTMPUtil_connectRTMP(JNIEnv *env, jclass clazz, jstring url) {
+        const char *rtmpUrl = env->GetStringUTFChars(url, NULL);
 
+        live = static_cast<Live *>(malloc(sizeof(Live)));
+        live->rtmp = RTMP_Alloc();
+        RTMP_Init(live->rtmp);
+        live->rtmp->Link.timeout = 10;
+        if (!RTMP_SetupURL(live->rtmp, (char *) rtmpUrl)) {
+            LOGE("RTMP_设置连接失败");
+            return -1;
+        }
+
+        RTMP_EnableWrite(live->rtmp); // 推送
+
+        if (!RTMP_Connect(live->rtmp, NULL)) {
+            LOGE("RTMP_连接失败");
+            RTMP_Free(live->rtmp);
+            return -1;
+        }
+        if (!RTMP_ConnectStream(live->rtmp, 0)) {
+            LOGE("RTMP_创建流失败");
+            RTMP_Close(live->rtmp);
+            RTMP_Free(live->rtmp);
+            return -1;
+        }
+        LOGE("RTMP_连接成功");
+
+        env->ReleaseStringUTFChars(url, rtmpUrl);
+        return 1;
+    }
+
+    JNIEXPORT jint JNICALL
+    Java_com_live_mooselive_utils_RTMPUtil_closeRTMP(JNIEnv *env, jclass clazz) {
+        if (live) {
+            if (live->rtmp) {
+                if (RTMP_IsConnected(live->rtmp)) {
+                    RTMP_Close(live->rtmp);
+                }
+                RTMP_Free(live->rtmp);
+            }
+            live->rtmp = NULL;
+            free(live);
+        }
+        return 1;
+    }
+
+    JNIEXPORT void JNICALL
+    Java_com_live_mooselive_utils_RTMPUtil_sendData(JNIEnv *env, jclass clazz, jint type,
+                                                    jbyteArray data, jint len, jlong tms) {
+        jbyte *buf = env->GetByteArrayElements(data, 0);
+        switch (type) {
+            case 0: // video
+                sendVideoData(buf, len, tms);
+                break;
+            case 1: // aac header
+                sendAudioHeader(buf, len, tms);
+                break;
+            case 2: // aac data
+                sendAudioData(buf, len, tms);
+                break;
+        }
+        env->ReleaseByteArrayElements(data, buf, 0);
+    }
+
+
+}
+extern "C"
 JNIEXPORT jint JNICALL
-Java_com_live_mooselive_av_screen_ScreenLive_connectRTMP(JNIEnv *env, jobject thiz, jstring url) {
+Java_com_live_mooselive_utils_CameraUtil_connectRTMP(JNIEnv *env, jclass clazz, jstring url) {
     const char *rtmpUrl = env->GetStringUTFChars(url, NULL);
 
     live = static_cast<Live *>(malloc(sizeof(Live)));
@@ -390,21 +440,4 @@ Java_com_live_mooselive_av_screen_ScreenLive_connectRTMP(JNIEnv *env, jobject th
 
     env->ReleaseStringUTFChars(url, rtmpUrl);
     return 1;
-}
-
-JNIEXPORT jint JNICALL
-Java_com_live_mooselive_av_screen_ScreenLive_closeRTMP(JNIEnv *env, jobject thiz) {
-    if (live) {
-        if (live->rtmp) {
-            if (RTMP_IsConnected(live->rtmp)) {
-//                RTMP_Close(live->rtmp);
-            }
-            RTMP_Free(live->rtmp);
-        }
-        live->rtmp = NULL;
-        free(live);
-    }
-    return 1;
-}
-
 }

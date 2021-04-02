@@ -1,8 +1,12 @@
 package com.live.mooselive.activity;
 
 import androidx.annotation.Nullable;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 
+import android.Manifest;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.graphics.PixelFormat;
 import android.net.Uri;
 import android.os.Build;
@@ -30,6 +34,7 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.LinkedList;
 
 import butterknife.BindView;
 import butterknife.OnClick;
@@ -58,7 +63,6 @@ public class MainActivity extends BaseActivity {
 
     @Override
     protected void init() {
-//        PermissionUtil.requestRecordAudioPermission(this);
         PermissionUtil.requestWRPermissions(this);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             if (!Settings.canDrawOverlays(this)) {
@@ -67,15 +71,19 @@ public class MainActivity extends BaseActivity {
                 startActivityForResult(intent,123);
             }
         }
-        etRTMPAddr.setText("rtmp://live-push.bilivideo.com/live-bvc/?streamname=live_11852946_29221900&key=e8d63f1642891cfa3b342276147f62ca&schedule=rtmp");
-//        etRTMPAddr.setText("rtmp://tx.direct.huya.com/huyalive/1640117789-1640117789-0-3280359034-10057-A-1615440186-1?seq=1615440187407&type=simple");
+//        etRTMPAddr.setText("rtmp://live-push.bilivideo.com/live-bvc/?streamname=live_11852946_29221900&key=e8d63f1642891cfa3b342276147f62ca&schedule=rtmp");
+        etRTMPAddr.setText("rtmp://tx.direct.huya.com/huyalive/1640117789-1640117789-0-3280359034-10057-A-1615440186-1?seq=1615440187407&type=simple");
     }
 
     @OnClick({R.id.btn_anchor, R.id.btn_audience,R.id.btn_rtmp_test,R.id.btn_mediaProjection})
     void onClick(View v) {
         switch (v.getId()) {
             case R.id.btn_anchor:
-                startActivity(new Intent(this,AnchorActivity.class));
+                if (ActivityCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+                    PermissionUtil.requestCamera(this);
+                } else {
+                    startActivity(new Intent(this, AnchorActivity.class));
+                }
                 break;
             case R.id.btn_audience:
                 startActivity(new Intent(this,AudienceActivity.class));
