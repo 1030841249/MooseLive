@@ -31,11 +31,24 @@
             android:id="@+id/btn_anchor_start_live"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="开始直播"
+            android:text="开播"
+            android:layout_marginLeft="20dp"/>
+
+        <Button
+            android:id="@+id/btn_anchor_stop_live"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="停播"
             android:layout_marginLeft="20dp"/>
 
     </LinearLayout>
 
-        android:layout_height="wrap_content" />
+    <ImageView
+        android:id="@+id/iv_cover"
+        android:layout_width="100dp"
+        android:layout_height="200dp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        android:scaleType="center"/>
 
 </androidx.constraintlayout.widget.ConstraintLayout>

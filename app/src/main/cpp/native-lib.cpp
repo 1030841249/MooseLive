@@ -4,6 +4,7 @@
 #include <log.h>
 #include <pthread.h>
 #include <android/log.h>
+#include <opencl-c-base.h>
 #include "Log.h"
 
 //RTMP *rtmp = NULL;
@@ -21,106 +22,13 @@ typedef struct {
 Live *live;
 
 
-void receiveRTMPData(JNIEnv *env) {
 
-    jclass cls = env->GetObjectClass(g_obj);
-    jmethodID receiveRtmpData = env->GetMethodID(cls, "receiveRtmpData", "([B)V");
-
-    int nRead = 0;
-    int bufSize = 1024 * 1024 * 10;
-    char *buf = (char *) malloc(bufSize);
-    FILE *fp = fopen("/data/data/com.live.mooselive/receive.flv","wb");
-    if (!fp) {
-        __android_log_print(ANDROID_LOG_ERROR, "NATIVE", "创建文件失败");
-    }
-    jbyteArray byteArray = env->NewByteArray(bufSize);
-    int countReadSize = 0;
-    int oneTagSize = 0;
-//    while(nRead = RTMP_Read(rtmp,buf,bufSize)) {
-//        env->SetByteArrayRegion(byteArray, 0, nRead, (jbyte *)buf);
-//        env->CallVoidMethod(g_obj, receiveRtmpData,byteArray);
-//        fwrite(buf, 1, nRead, fp);
-//        countReadSize += nRead;
-//
-//
-//
-//        __android_log_print(ANDROID_LOG_ERROR, "NATIVE", "本次读取数：%d  总读取数量：%d", nRead,
-//                            countReadSize);
-//    }
-
-    free(buf);
-}
-
-void releaseRTMP() {
-//    RTMP_Close(rtmp);
-//    RTMP_Free(rtmp);
-//    rtmp = NULL;
-}
-
-int connectRTMP(JNIEnv *env,char* url) {
-
-//    if(rtmp != NULL) {
-//        releaseRTMP();
-//    }
-//
-//    bool isLiveStream = false;
-//
-//    rtmp =RTMP_Alloc();
-//    RTMP_Init(rtmp);
-//    rtmp->Link.timeout = 10;
-//    if (!RTMP_SetupURL(rtmp, url)) {
-//        RTMP_Free(rtmp);
-//        return -1;
-//    }
-//
-//    RTMP_SetBufferMS(rtmp, 3600 * 1000);
-//
-//    if (!RTMP_Connect(rtmp, NULL)) {
-//        RTMP_Log(RTMP_LOGERROR, "NetConnect is Error");
-//        RTMP_Free(rtmp);
-//        return -1;
-//    }
-//    if(!RTMP_ConnectStream(rtmp,0)) {
-//        RTMP_Log(RTMP_LOGERROR, "NetStream is Error");
-//        RTMP_Free(rtmp);
-//        RTMP_Close(rtmp);
-//        return -1;
-//    }
-
-
-    __android_log_print(ANDROID_LOG_ERROR, "NATIVE", "RTMP 连接成功");
-    receiveRTMPData(env);
-    return 0;
-}
-
-extern "C" {
-JNIEXPORT void JNICALL
-Java_com_live_mooselive_activity_RTMPActivity_connectRTMP(JNIEnv *env, jobject thiz, jstring url) {
-    const char* rtmpUrl = env->GetStringUTFChars(url, NULL);
-    g_obj = env->NewGlobalRef(thiz);
-    char *tmp = const_cast<char *>(rtmpUrl);
-    connectRTMP(env,tmp);
-}
-
-JNIEXPORT void JNICALL
-Java_com_live_mooselive_activity_RTMPActivity_closeRTMP(JNIEnv *env, jobject thiz) {
-//    if(rtmp) {
-//        RTMP_Free(rtmp);
-//        RTMP_Close(rtmp);
-//        rtmp = nullptr;
-//        __android_log_print(ANDROID_LOG_ERROR,"NATIVE","关闭RTMP成功 ");
-//    } else {
-//
-//    }
-}
-}
-
-int sendPacket(RTMP *rtmp, RTMPPacket* packet) {
+int sendPacket(Live *live, RTMPPacket* packet) {
     int ret = -1;
-    if (rtmp && RTMP_IsConnected(rtmp)) {
+    if (live && live->rtmp && RTMP_IsConnected(live->rtmp)) {
         // 防止关闭RTMP连接时报错
-        packet->m_nInfoField2 = rtmp->m_stream_id;
-        ret = RTMP_SendPacket(rtmp, packet, 0);
+        packet->m_nInfoField2 = live->rtmp->m_stream_id;
+        ret = RTMP_SendPacket(live->rtmp, packet, 0);
     }
     RTMPPacket_Free(packet);
     free(packet);    //释放内存
@@ -199,7 +107,7 @@ int sendVideoSpsPps(Live *live) {
     packet->m_hasAbsTimestamp = 0;
     packet->m_headerType = RTMP_PACKET_SIZE_MEDIUM;
     /*调用发送接口*/
-    return sendPacket(live->rtmp,packet);
+    return sendPacket(live,packet);
 }
 
 /**
@@ -211,7 +119,6 @@ int sendVideoSpsPps(Live *live) {
  * @return
  */
 int sendH264Packet(int8_t *buf, int len,long tms){
-
     /*去掉帧界定符*/
     if (buf[2] == 0x00) { /*00 00 00 01*/
         buf += 4;
@@ -252,7 +159,7 @@ int sendH264Packet(int8_t *buf, int len,long tms){
     packet->m_nTimeStamp = tms;
     packet->m_nChannel = 0x04; // csid
     packet->m_headerType = RTMP_PACKET_SIZE_LARGE;
-    return sendPacket(live->rtmp,packet);
+    return sendPacket(live,packet);
 }
 
 /**
@@ -313,7 +220,7 @@ int sendAudioHeader(int8_t *data, int len, long tms) {
     packet->m_nTimeStamp = 0;
     packet->m_nChannel = 0x05; // 视频 04，音频 05
     packet->m_headerType = RTMP_PACKET_SIZE_MEDIUM;
-    return sendPacket(live->rtmp,packet);
+    return sendPacket(live,packet);
 }
 
 /**
@@ -338,13 +245,58 @@ int sendAudioData(int8_t *data, int len, long tms) {
     packet->m_nTimeStamp = tms;
     packet->m_nChannel = 0x05; // 视频 04，音频 05
     packet->m_headerType = RTMP_PACKET_SIZE_LARGE;
-    return sendPacket(live->rtmp,packet);
+    return sendPacket(live,packet);
 }
 
+void sendData(int8_t  type,int8_t* buf,int len,long tms) {
+    switch (type) {
+        case 0: // video
+            sendVideoData(buf, len, tms);
+            break;
+        case 1: // aac header
+            sendAudioHeader(buf, len, tms);
+            break;
+        case 2: // aac data
+            sendAudioData(buf, len, tms);
+            break;
+    }
+}
+
+void yuv_rotate_90(int8_t *des,int8_t *src,int width,int height)
+{
+    int n = 0;
+    int hw = width>>1;
+    int hh = height>>1;
+    int size = width * height;
+    int hsize = size>>2;
+
+    int pos = 0;
+    //copy y
+    for(int j = 0; j < width;j++)
+    {
+        pos = size;
+        for(int i = height - 1; i >= 0; i--)
+        {	pos-=width;
+            des[n++] = src[pos + j];
+        }
+    }
+    //copy uv
+    int8_t *ptemp = src + size;
+    int m = n + hsize;
+    for(int j = 0;j < hw;j++)
+    {  	pos= hsize;
+        for(int i = hh - 1;i >= 0;i--)
+        {
+            pos-=hw;
+            des[n++] = ptemp[ pos + j ];
+            des[m++] = ptemp[ pos + j+ hsize ];
+        }
+    }
+}
 extern "C" {
     JNIEXPORT jint JNICALL
     Java_com_live_mooselive_utils_RTMPUtil_connectRTMP(JNIEnv *env, jclass clazz, jstring url) {
-        const char *rtmpUrl = env->GetStringUTFChars(url, NULL);
+        const char *rtmpUrl = env->GetStringUTFChars(url, 0);
 
         live = static_cast<Live *>(malloc(sizeof(Live)));
         live->rtmp = RTMP_Alloc();
@@ -357,7 +309,7 @@ extern "C" {
 
         RTMP_EnableWrite(live->rtmp); // 推送
 
-        if (!RTMP_Connect(live->rtmp, NULL)) {
+        if (!RTMP_Connect(live->rtmp, 0)) {
             LOGE("RTMP_连接失败");
             RTMP_Free(live->rtmp);
             return -1;
@@ -383,27 +335,29 @@ extern "C" {
                 }
                 RTMP_Free(live->rtmp);
             }
-            live->rtmp = NULL;
+            live->rtmp = nullptr;
             free(live);
         }
+        live = nullptr;
         return 1;
     }
 
     JNIEXPORT void JNICALL
     Java_com_live_mooselive_utils_RTMPUtil_sendData(JNIEnv *env, jclass clazz, jint type,
                                                     jbyteArray data, jint len, jlong tms) {
+        LOGE("SEND Data");
         jbyte *buf = env->GetByteArrayElements(data, 0);
-        switch (type) {
-            case 0: // video
-                sendVideoData(buf, len, tms);
-                break;
-            case 1: // aac header
-                sendAudioHeader(buf, len, tms);
-                break;
-            case 2: // aac data
-                sendAudioData(buf, len, tms);
-                break;
-        }
+        sendData(type,buf,len,tms);
+        env->ReleaseByteArrayElements(data, buf, 0);
+    }
+
+    JNIEXPORT void JNICALL
+    Java_com_live_mooselive_utils_RTMPUtil_sendDataNeedRotate(JNIEnv *env, jclass clazz, jint type,
+                                                    jbyteArray data, jint len, jlong tms,jint width,jint height) {
+        jbyte *buf = env->GetByteArrayElements(data, 0);
+        int8_t *newBuf = buf;
+        yuv_rotate_90(newBuf,buf,width,height);
+        sendData(type,newBuf,len,tms);
         env->ReleaseByteArrayElements(data, buf, 0);
     }
 
@@ -412,7 +366,7 @@ extern "C" {
 extern "C"
 JNIEXPORT jint JNICALL
 Java_com_live_mooselive_utils_CameraUtil_connectRTMP(JNIEnv *env, jclass clazz, jstring url) {
-    const char *rtmpUrl = env->GetStringUTFChars(url, NULL);
+    const char *rtmpUrl = env->GetStringUTFChars(url, 0);
 
     live = static_cast<Live *>(malloc(sizeof(Live)));
     live->rtmp = RTMP_Alloc();
@@ -425,7 +379,7 @@ Java_com_live_mooselive_utils_CameraUtil_connectRTMP(JNIEnv *env, jclass clazz, 
 
     RTMP_EnableWrite(live->rtmp); // 推送
 
-    if (!RTMP_Connect(live->rtmp, NULL)) {
+    if (!RTMP_Connect(live->rtmp, 0)) {
         LOGE("RTMP_连接失败");
         RTMP_Free(live->rtmp);
         return -1;

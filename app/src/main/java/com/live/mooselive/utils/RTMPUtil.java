@@ -14,4 +14,6 @@ public class RTMPUtil {
     public static final native int closeRTMP();
 
     public static final native void sendData(int type, byte[] data, int len, long tms);
+
+    public static final native void sendDataNeedRotate(int type, byte[] data, int len, long tms,int width,int height);
 }
