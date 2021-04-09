@@ -6,6 +6,12 @@ public class RTMPPacket {
     public int len;
     public long tms;
 
+    public RTMPPacket(byte[] buffer, int len, long tms) {
+        this.data = buffer;
+        this.len = len;
+        this.tms = tms;
+    }
+
     public RTMPPacket(int type, byte[] data, int len, long tms) {
         this.type = type;
         this.data = data;

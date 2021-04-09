@@ -39,6 +39,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="停播"
+            android:enabled="false"
             android:layout_marginLeft="20dp"/>
 
     </LinearLayout>

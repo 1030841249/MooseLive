@@ -6,9 +6,8 @@ import android.media.MediaFormat;
 import android.os.Bundle;
 import android.view.Surface;
 
+import com.live.mooselive.av.bean.RTMPPacket;
 import com.live.mooselive.av.extractor.VideoExtracotr;
-import com.live.mooselive.bean.RTMPPacket;
-import com.live.mooselive.utils.LogUtil;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -90,7 +89,7 @@ public class ScreenVideo implements Runnable {
         RTMPPacket packet = videoExtracotr.readOneFrame();
         if(packet != null) {
             if (mCallback != null) {
-                mCallback.onEncodedVideo(packet.buffer, 30);
+                mCallback.onEncodedVideo(packet.data, 30);
             }
         }
     }

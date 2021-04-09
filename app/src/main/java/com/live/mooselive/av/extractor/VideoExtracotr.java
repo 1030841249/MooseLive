@@ -3,7 +3,7 @@ package com.live.mooselive.av.extractor;
 import android.media.MediaExtractor;
 import android.media.MediaFormat;
 
-import com.live.mooselive.bean.RTMPPacket;
+import com.live.mooselive.av.bean.RTMPPacket;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;

@@ -3,16 +3,12 @@ package com.live.mooselive.av.camera;
 
 import android.app.Activity;
 import android.content.pm.PackageManager;
-import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
 import android.graphics.ImageFormat;
 import android.hardware.Camera;
 import android.view.Surface;
 import android.view.SurfaceHolder;
-import android.widget.ImageView;
 
 import com.live.mooselive.App;
-import com.live.mooselive.av.encoder.CameraEncoder;
 import com.live.mooselive.utils.LogUtil;
 import com.live.mooselive.utils.RTMPUtil;
 
@@ -22,7 +18,6 @@ import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 
 import static android.hardware.Camera.CameraInfo.CAMERA_FACING_BACK;
-import static android.hardware.Camera.CameraInfo.CAMERA_FACING_FRONT;
 
 public class CameraLive {
     private static final String TAG = "CameraUtil";
@@ -35,6 +30,8 @@ public class CameraLive {
     private int mHeight = 1080;
     private byte[] mPreviewBuffer;
     CameraEncoder mCameraEncoder;
+    CameraAudio mCameraAudio;
+    CameraMedia mCameraMedia;
 
     private ScheduledExecutorService mScheduledExecutorService;
     private Future mCameraTask;
@@ -55,8 +52,7 @@ public class CameraLive {
         }
     };
 
-
-    public CameraLive(Activity activity,SurfaceHolder surfaceHolder) {
+    public CameraLive(Activity activity, SurfaceHolder surfaceHolder) {
         mScheduledExecutorService = Executors.newScheduledThreadPool(2);
         if (!checkCamera()) {
             return;
@@ -68,6 +64,8 @@ public class CameraLive {
 
     private void initCamera() {
         initEncoder();
+        initAudio();
+        initCameraMedia();
         mCamera = Camera.open(mCameraId);
         setCameraDisplayOrientation(mCameraId,mCamera);
         initParameters();
@@ -85,6 +83,14 @@ public class CameraLive {
         mCameraEncoder.setCameraType(mCameraId);
     }
 
+    private void initAudio() {
+        mCameraAudio = new CameraAudio();
+    }
+
+    private void initCameraMedia() {
+        mCameraMedia = new CameraMedia(mCameraEncoder, mCameraAudio);
+    }
+
     public void initParameters() {
         Camera.Parameters parameters = mCamera.getParameters();
         if (mCameraId == CAMERA_FACING_BACK) { // 前置摄像头会自动对焦，设置该参数会报错
@@ -98,10 +104,6 @@ public class CameraLive {
     }
 
     private void initPreviewBuffer() {
-        Camera.Size size = mCamera.getParameters().getPreviewSize();
-//        mWidth = size.width;
-//        mHeight = size.height;
-//        mPreviewBuffer = new byte[mWidth * mHeight * 4];
         mPreviewBuffer =  new byte[mWidth * mHeight * 3 / 2];
 //        mPreviewBuffer =  new byte[mWidth * mHeight * ImageFormat.getBitsPerPixel(ImageFormat.NV21) / 8];
         mCamera.addCallbackBuffer(mPreviewBuffer);
@@ -115,7 +117,6 @@ public class CameraLive {
         stopPreview();
         mCameraId = mCameraId == 0 ? 1 : 0;
         initCamera();
-//        startLive(url);
     }
 
     public void startLive(String url) {
@@ -125,8 +126,8 @@ public class CameraLive {
             public void run() {
                 if (RTMPUtil.connectRTMP(url) == 1) {
                     LogUtil.e(TAG,"Camera 连接RTMP成功");
+                    mCameraMedia.startLive();
                     isStart = true;
-                    mCameraEncoder.run();
                 } else {
                     LogUtil.e(TAG,"Camera 连接RTMP失败");
                 }
@@ -149,10 +150,9 @@ public class CameraLive {
             mCamera.release();
             mCamera = null;
         }
-        if (mCameraEncoder != null) {
-            mCameraEncoder.stop();
-            mCameraEncoder.cleanFrame();
-            mCameraEncoder = null;
+        if (mCameraMedia != null) {
+            mCameraMedia.stopLive();
+            mCameraMedia.release();
         }
     }
 

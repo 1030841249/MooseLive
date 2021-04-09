@@ -5,7 +5,6 @@ import android.view.SurfaceView;
 import android.view.View;
 import android.widget.Button;
 import android.widget.ImageView;
-import android.widget.Toast;
 
 import com.live.mooselive.R;
 import com.live.mooselive.base.BaseActivity;
@@ -51,6 +50,8 @@ public class AnchorActivity extends BaseActivity {
             public void onClick(View v) {
                 cameraUtil.startLive(url);
                 ToastUtil.showShortToast("开始直播");
+                btnStartLive.setEnabled(false);
+                btnStopLive.setEnabled(true);
             }
         });
         btnStopLive.setOnClickListener(new View.OnClickListener() {
@@ -58,6 +59,8 @@ public class AnchorActivity extends BaseActivity {
             public void onClick(View v) {
                 cameraUtil.stopLive();
                 ToastUtil.showShortToast("已关闭直播");
+                btnStartLive.setEnabled(true);
+                btnStopLive.setEnabled(false);
             }
         });
         sfvAnchor.getHolder().addCallback(new SurfaceHolder.Callback() {
